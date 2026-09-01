@@ -17,7 +17,7 @@
     <description>Experimental research backend for Nepal Hazard Watch</description>
 
     <properties>
-        <java.version>21</java.version>
+        <java.version>17</java.version>
     </properties>
 
     <dependencies>

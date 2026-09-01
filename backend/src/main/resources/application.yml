@@ -4,7 +4,7 @@ spring:
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/nepal_hazard_watch}
     username: ${DATABASE_USERNAME:nhw}
-    password: ${DATABASE_PASSWORD:nhw_local_dev}
+    password: ${DATABASE_PASSWORD:nepal123}
   jpa:
     hibernate:
       ddl-auto: validate

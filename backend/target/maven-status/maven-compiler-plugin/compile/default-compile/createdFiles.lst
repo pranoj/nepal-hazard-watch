@@ -1,0 +1,16 @@
+watch\nepalhazard\replay\package-info.class
+watch\nepalhazard\Application.class
+watch\nepalhazard\evidence\package-info.class
+watch\nepalhazard\repository\package-info.class
+watch\nepalhazard\risk\package-info.class
+watch\nepalhazard\geography\package-info.class
+watch\nepalhazard\dto\package-info.class
+watch\nepalhazard\config\package-info.class
+watch\nepalhazard\collector\package-info.class
+watch\nepalhazard\normalization\package-info.class
+watch\nepalhazard\evaluation\package-info.class
+watch\nepalhazard\entity\package-info.class
+watch\nepalhazard\service\package-info.class
+watch\nepalhazard\detection\package-info.class
+watch\nepalhazard\health\package-info.class
+watch\nepalhazard\controller\package-info.class
