@@ -1,6 +1,6 @@
 package watch.nepalhazard.dto;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import watch.nepalhazard.entity.DataSource;
 
 public record DataSourceDTO(
@@ -9,7 +9,7 @@ public record DataSourceDTO(
         String organization,
         String dataType,
         String currentStatus,
-        Instant lastSuccessfulFetch) {
+        LocalDateTime lastSuccessfulFetch) {
 
     public static DataSourceDTO from(DataSource dataSource) {
         return new DataSourceDTO(

@@ -12,6 +12,8 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+    validateOnMigrate: false
+    outOfOrder: true
 
 management:
   endpoints:
@@ -24,3 +26,8 @@ management:
 
 server:
   port: ${PORT:8080}
+
+logging:
+  level:
+    root: DEBUG
+    watch.nepalhazard: DEBUG

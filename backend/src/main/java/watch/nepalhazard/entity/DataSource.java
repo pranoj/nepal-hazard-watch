@@ -6,8 +6,12 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import java.time.Instant;
+import java.time.LocalDateTime;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
+@Data
+@NoArgsConstructor
 @Entity
 @Table(name = "data_sources")
 public class DataSource {
@@ -27,10 +31,15 @@ public class DataSource {
     private String currentStatus;
 
     @Column(name = "last_successful_fetch")
-    private Instant lastSuccessfulFetch;
+    private LocalDateTime lastSuccessfulFetch;
 
-    protected DataSource() {
-    }
+    @Column(name = "api_url")
+    private String apiUrl;
+
+    @Column(name = "update_frequency")
+    private String updateFrequency;
+
+    private String description;
 
     public Long getId() {
         return id;
@@ -52,7 +61,7 @@ public class DataSource {
         return currentStatus;
     }
 
-    public Instant getLastSuccessfulFetch() {
+    public LocalDateTime getLastSuccessfulFetch() {
         return lastSuccessfulFetch;
     }
 }

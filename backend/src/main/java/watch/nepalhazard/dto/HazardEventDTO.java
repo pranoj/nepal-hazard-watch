@@ -1,25 +1,31 @@
 package watch.nepalhazard.dto;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import watch.nepalhazard.entity.HazardEvent;
 
 public record HazardEventDTO(
         Long id,
         Long regionId,
-        String riskLevel,
         String eventType,
-        Instant firstDetectedAt,
+        String status,
+        LocalDateTime eventTime,
         Double latitude,
-        Double longitude) {
+        Double longitude,
+        Double magnitude,
+        String description,
+        Integer deathToll) {
 
     public static HazardEventDTO from(HazardEvent hazardEvent) {
         return new HazardEventDTO(
                 hazardEvent.getId(),
                 hazardEvent.getRegionId(),
-                hazardEvent.getRiskLevel(),
                 hazardEvent.getEventType(),
-                hazardEvent.getFirstDetectedAt(),
+                hazardEvent.getStatus(),
+                hazardEvent.getEventTime(),
                 hazardEvent.getLatitude(),
-                hazardEvent.getLongitude());
+                hazardEvent.getLongitude(),
+                hazardEvent.getMagnitude(),
+                hazardEvent.getDescription(),
+                hazardEvent.getDeathToll());
     }
 }

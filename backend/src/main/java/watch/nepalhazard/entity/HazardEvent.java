@@ -6,8 +6,12 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import java.time.Instant;
+import java.time.LocalDateTime;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
+@Data
+@NoArgsConstructor
 @Entity
 @Table(name = "hazard_events")
 public class HazardEvent {
@@ -27,15 +31,19 @@ public class HazardEvent {
 
     private String status;
 
-    @Column(name = "first_detected_at")
-    private Instant firstDetectedAt;
+    @Column(name = "event_time")
+    private LocalDateTime eventTime;
 
     private Double latitude;
 
     private Double longitude;
 
-    protected HazardEvent() {
-    }
+    private Double magnitude;
+
+    private String description;
+
+    @Column(name = "death_toll")
+    private Integer deathToll;
 
     public Long getId() {
         return id;
@@ -57,8 +65,8 @@ public class HazardEvent {
         return status;
     }
 
-    public Instant getFirstDetectedAt() {
-        return firstDetectedAt;
+    public LocalDateTime getEventTime() {
+        return eventTime;
     }
 
     public Double getLatitude() {
