@@ -15,8 +15,6 @@ import watch.nepalhazard.repository.HazardEventRepository;
 @CrossOrigin(origins = "http://localhost:5173")
 public class HazardEventController {
 
-    private static final String OPEN_STATUS = "OPEN";
-
     private final HazardEventRepository hazardEventRepository;
 
     @Autowired
@@ -26,7 +24,7 @@ public class HazardEventController {
 
     @GetMapping
     public ResponseEntity<List<HazardEventDTO>> getHazardEvents() {
-        List<HazardEventDTO> hazardEvents = hazardEventRepository.findByStatus(OPEN_STATUS).stream()
+        List<HazardEventDTO> hazardEvents = hazardEventRepository.findAll().stream()
                 .map(HazardEventDTO::from)
                 .toList();
         return ResponseEntity.ok(hazardEvents);
