@@ -11,10 +11,14 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpectedException(Exception ex) {
+        System.err.println("❌ ERROR: " + ex.getMessage());
+        ex.printStackTrace();
+
         ErrorResponse body = ErrorResponse.of(
                 HttpStatus.INTERNAL_SERVER_ERROR.value(),
                 "Internal Server Error",
-                "An unexpected error occurred while processing the request.");
+                ex.getMessage());
+
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
     }
 }

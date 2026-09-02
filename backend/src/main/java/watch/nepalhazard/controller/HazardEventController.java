@@ -11,7 +11,7 @@ import watch.nepalhazard.dto.HazardEventDTO;
 import watch.nepalhazard.repository.HazardEventRepository;
 
 @RestController
-@RequestMapping("/api/hazard-events")
+@RequestMapping("/hazard-events")
 @CrossOrigin(origins = "http://localhost:5173")
 public class HazardEventController {
 

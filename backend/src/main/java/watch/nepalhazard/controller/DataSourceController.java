@@ -11,7 +11,7 @@ import watch.nepalhazard.dto.DataSourceDTO;
 import watch.nepalhazard.repository.DataSourceRepository;
 
 @RestController
-@RequestMapping("/api/data-sources")
+@RequestMapping("/data-sources")
 @CrossOrigin(origins = "http://localhost:5173")
 public class DataSourceController {
 

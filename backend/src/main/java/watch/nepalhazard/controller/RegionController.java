@@ -11,7 +11,7 @@ import watch.nepalhazard.dto.RegionDTO;
 import watch.nepalhazard.repository.RegionRepository;
 
 @RestController
-@RequestMapping("/api/regions")
+@RequestMapping("/regions")
 @CrossOrigin(origins = "http://localhost:5173")
 public class RegionController {
 
