@@ -1,0 +1,116 @@
+spring:
+  application:
+    name: nepal-hazard-watch
+
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/nepal_hazard_watch}
+    username: ${DATABASE_USERNAME:nhw}
+    password: ${DATABASE_PASSWORD:}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 20000
+      idle-timeout: 300000
+      max-lifetime: 1200000
+
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        use_sql_comments: true
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    validateOnMigrate: false
+    outOfOrder: true
+
+server:
+  port: ${PORT:8080}
+  servlet:
+    context-path: /api
+  compression:
+    enabled: true
+    min-response-size: 1024
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+  metrics:
+    export:
+      simple:
+        enabled: true
+
+logging:
+  level:
+    root: INFO
+    watch.nepalhazard: INFO
+    org.springframework.web: WARN
+    org.hibernate: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/nepal-hazard-watch.log
+    max-size: 10MB
+    max-history: 10
+
+earthquake:
+  usgs:
+    api-url: https://earthquake.usgs.gov/fdsnws/event/1/query
+    fetch-interval-ms: 600000
+    min-magnitude: 4.0
+    max-radius-km: 180
+    timeout-seconds: 30
+    retry-attempts: 3
+
+  nepal:
+    latitude-min: 26.0
+    latitude-max: 30.5
+    longitude-min: 80.0
+    longitude-max: 88.5
+
+  glacier-zone:
+    latitude-min: 28.0
+    latitude-max: 29.5
+
+  alert:
+    critical-magnitude: 6.0
+    high-magnitude: 5.5
+    moderate-magnitude: 5.0
+    low-magnitude: 4.0
+
+  query-regions:
+    - name: eastern
+      latitude: 27.5
+      longitude: 87.5
+    - name: central
+      latitude: 28.25
+      longitude: 84.25
+    - name: western
+      latitude: 28.5
+      longitude: 81.0
+
+weather:
+  api-url: ${WEATHER_API_URL:https://api.openweathermap.org/data/2.5}
+  api-key: ${WEATHER_API_KEY:your-api-key-here}
+  fetch-interval-ms: 1800000
+  nepal-cities:
+    - name: Kathmandu
+      latitude: 27.7172
+      longitude: 85.3240
+    - name: Pokhara
+      latitude: 28.2096
+      longitude: 83.9856

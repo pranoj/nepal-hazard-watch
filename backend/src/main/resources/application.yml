@@ -5,7 +5,7 @@ spring:
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/nepal_hazard_watch}
     username: ${DATABASE_USERNAME:nhw}
-    password: ${DATABASE_PASSWORD:nepal123}
+    password: ${DATABASE_PASSWORD:}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
@@ -56,7 +56,7 @@ management:
 logging:
   level:
     root: INFO
-    watch.nepalhazard: DEBUG
+    watch.nepalhazard: INFO
     org.springframework.web: WARN
     org.hibernate: WARN
   pattern:
