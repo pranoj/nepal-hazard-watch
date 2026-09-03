@@ -2,6 +2,7 @@ import { RegionsList } from './RegionsList';
 import { DataSourcesList } from './DataSourcesList';
 import { HazardEventsList } from './HazardEventsList';
 import { Map } from './Map';
+import { AlertStatus } from './AlertStatus';
 import { useRegions } from '../api/useRegions';
 import { useDataSources } from '../api/useDataSources';
 import { useHazardEvents } from '../api/useHazardEvents';
@@ -17,6 +18,8 @@ export function Dashboard() {
             <p style={{ color: '#666', marginBottom: '2rem' }}>
                 Real-time monitoring of regions, data sources, and hazard events
             </p>
+
+            <AlertStatus />
 
             <Map regions={regions} hazardEvents={hazardEvents} />
             <RegionsList />

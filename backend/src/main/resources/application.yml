@@ -34,6 +34,8 @@ spring:
 
 server:
   port: ${PORT:8080}
+  servlet:
+    context-path: /api
   compression:
     enabled: true
     min-response-size: 1024
