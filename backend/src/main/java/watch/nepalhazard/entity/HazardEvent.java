@@ -44,36 +44,4 @@ public class HazardEvent {
 
     @Column(name = "death_toll")
     private Integer deathToll;
-
-    public Long getId() {
-        return id;
-    }
-
-    public Long getRegionId() {
-        return regionId;
-    }
-
-    public String getRiskLevel() {
-        return riskLevel;
-    }
-
-    public String getEventType() {
-        return eventType;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public LocalDateTime getEventTime() {
-        return eventTime;
-    }
-
-    public Double getLatitude() {
-        return latitude;
-    }
-
-    public Double getLongitude() {
-        return longitude;
-    }
 }
