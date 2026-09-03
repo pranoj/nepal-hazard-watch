@@ -31,3 +31,8 @@ logging:
   level:
     root: DEBUG
     watch.nepalhazard: DEBUG
+
+weather:
+  api-url: https://api.openweathermap.org/data/2.5
+  api-key: ${WEATHER_API_KEY:demo-key}
+  fetch-interval-ms: 1800000

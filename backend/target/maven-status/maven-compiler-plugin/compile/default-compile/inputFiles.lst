@@ -7,6 +7,7 @@ C:\Users\prano\Projects\nepal-hazard-watch\backend\src\main\java\watch\nepalhaza
 C:\Users\prano\Projects\nepal-hazard-watch\backend\src\main\java\watch\nepalhazard\controller\HazardEventController.java
 C:\Users\prano\Projects\nepal-hazard-watch\backend\src\main\java\watch\nepalhazard\controller\package-info.java
 C:\Users\prano\Projects\nepal-hazard-watch\backend\src\main\java\watch\nepalhazard\controller\RegionController.java
+C:\Users\prano\Projects\nepal-hazard-watch\backend\src\main\java\watch\nepalhazard\controller\WeatherController.java
 C:\Users\prano\Projects\nepal-hazard-watch\backend\src\main\java\watch\nepalhazard\detection\package-info.java
 C:\Users\prano\Projects\nepal-hazard-watch\backend\src\main\java\watch\nepalhazard\dto\DataSourceDTO.java
 C:\Users\prano\Projects\nepal-hazard-watch\backend\src\main\java\watch\nepalhazard\dto\ErrorResponse.java
@@ -17,6 +18,7 @@ C:\Users\prano\Projects\nepal-hazard-watch\backend\src\main\java\watch\nepalhaza
 C:\Users\prano\Projects\nepal-hazard-watch\backend\src\main\java\watch\nepalhazard\entity\HazardEvent.java
 C:\Users\prano\Projects\nepal-hazard-watch\backend\src\main\java\watch\nepalhazard\entity\package-info.java
 C:\Users\prano\Projects\nepal-hazard-watch\backend\src\main\java\watch\nepalhazard\entity\Region.java
+C:\Users\prano\Projects\nepal-hazard-watch\backend\src\main\java\watch\nepalhazard\entity\Weather.java
 C:\Users\prano\Projects\nepal-hazard-watch\backend\src\main\java\watch\nepalhazard\evaluation\package-info.java
 C:\Users\prano\Projects\nepal-hazard-watch\backend\src\main\java\watch\nepalhazard\evidence\package-info.java
 C:\Users\prano\Projects\nepal-hazard-watch\backend\src\main\java\watch\nepalhazard\geography\package-info.java
@@ -27,5 +29,8 @@ C:\Users\prano\Projects\nepal-hazard-watch\backend\src\main\java\watch\nepalhaza
 C:\Users\prano\Projects\nepal-hazard-watch\backend\src\main\java\watch\nepalhazard\repository\HazardEventRepository.java
 C:\Users\prano\Projects\nepal-hazard-watch\backend\src\main\java\watch\nepalhazard\repository\package-info.java
 C:\Users\prano\Projects\nepal-hazard-watch\backend\src\main\java\watch\nepalhazard\repository\RegionRepository.java
+C:\Users\prano\Projects\nepal-hazard-watch\backend\src\main\java\watch\nepalhazard\repository\WeatherRepository.java
 C:\Users\prano\Projects\nepal-hazard-watch\backend\src\main\java\watch\nepalhazard\risk\package-info.java
 C:\Users\prano\Projects\nepal-hazard-watch\backend\src\main\java\watch\nepalhazard\service\package-info.java
+C:\Users\prano\Projects\nepal-hazard-watch\backend\src\main\java\watch\nepalhazard\service\UsgsEarthquakeService.java
+C:\Users\prano\Projects\nepal-hazard-watch\backend\src\main\java\watch\nepalhazard\service\WeatherService.java
