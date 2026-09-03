@@ -34,8 +34,6 @@ spring:
 
 server:
   port: ${PORT:8080}
-  servlet:
-    context-path: /api
   compression:
     enabled: true
     min-response-size: 1024
@@ -113,3 +111,4 @@ weather:
       longitude: 85.3240
     - name: Pokhara
       latitude: 28.2096
+      longitude: 83.9856
