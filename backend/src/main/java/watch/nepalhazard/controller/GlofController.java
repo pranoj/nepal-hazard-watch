@@ -73,7 +73,8 @@ public class GlofController {
             response.put("earthquake", earthquake.get());
             response.put("glacierLocation", Map.of(
                     "latitude", glacierLat,
-                    "longitude", glacierLon));
+                    "longitude", glacierLon
+            ));
 
             return ResponseEntity.ok(response);
         } catch (Exception e) {
