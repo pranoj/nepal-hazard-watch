@@ -1,0 +1,16 @@
+spring:
+  datasource:
+    password: nepal123
+
+  jpa:
+    show-sql: true
+
+logging:
+  level:
+    root: INFO
+    watch.nepalhazard: DEBUG
+    org.springframework.web: DEBUG
+    org.hibernate: DEBUG
+
+weather:
+  api-key: 59b844f6e49216f1199796679e8e8ea5

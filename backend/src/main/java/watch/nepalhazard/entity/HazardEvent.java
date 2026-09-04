@@ -40,6 +40,8 @@ public class HazardEvent {
 
     private Double magnitude;
 
+    private Double depth;
+
     private String description;
 
     @Column(name = "death_toll")

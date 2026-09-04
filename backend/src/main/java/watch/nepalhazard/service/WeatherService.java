@@ -154,7 +154,7 @@ public class WeatherService {
     }
 
     public Weather getLatestWeather(String city) {
-        return weatherRepository.findMostRecentByLocation(city).orElse(null);
+        return weatherRepository.findLatestByLocation(city).orElse(null);
     }
 
     public List<Weather> getLatestWeatherForAllCities() {
