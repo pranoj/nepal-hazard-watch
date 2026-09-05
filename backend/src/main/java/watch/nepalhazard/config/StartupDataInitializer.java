@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
+import watch.nepalhazard.service.GlacierSyncService;
 import watch.nepalhazard.service.ICIMODGlacialLakeService;
 
 /**
@@ -25,6 +26,7 @@ import watch.nepalhazard.service.ICIMODGlacialLakeService;
 public class StartupDataInitializer {
 
     private final ICIMODGlacialLakeService icimodGlacialLakeService;
+    private final GlacierSyncService glacierSyncService;
 
     /**
      * Initialize ICIMOD data when Spring Boot application is ready
@@ -47,6 +49,11 @@ public class StartupDataInitializer {
 
             // Get count of loaded lakes
             long lakeCount = icimodGlacialLakeService.getNepalGlacialLakeCount();
+
+            // Initialize "Type B" glacier watch points (steep terminus near
+            // a known river corridor) - relies on river_basin_towns already
+            // being seeded, which happens earlier via CommandLineRunner
+            glacierSyncService.initializeGlacierData();
 
             log.info("═══════════════════════════════════════════════════════════");
             log.info("✅ STARTUP COMPLETE - {} glacial lakes loaded from ICIMOD", lakeCount);
