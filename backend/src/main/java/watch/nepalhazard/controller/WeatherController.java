@@ -23,9 +23,9 @@ public class WeatherController {
     private WeatherService weatherService;
 
     @GetMapping
-    public ResponseEntity<?> getLatestWeatherForAllCities() {
+    public ResponseEntity<?> getLatestWeatherForAllLocations() {
         try {
-            List<Weather> weatherList = weatherService.getLatestWeatherForAllCities();
+            List<Weather> weatherList = weatherService.getLatestWeatherForAllLocations();
             if (weatherList.isEmpty()) {
                 Map<String, String> response = new HashMap<>();
                 response.put("message", "No weather data available yet");
@@ -39,26 +39,26 @@ public class WeatherController {
         }
     }
 
-    @GetMapping("/{city}")
-    public ResponseEntity<?> getLatestWeatherForCity(@PathVariable String city) {
+    @GetMapping("/{location}")
+    public ResponseEntity<?> getLatestWeatherForLocation(@PathVariable String location) {
         try {
-            Weather weather = weatherService.getLatestWeather(city);
+            Weather weather = weatherService.getLatestWeather(location);
             if (weather == null) {
                 Map<String, String> response = new HashMap<>();
-                response.put("message", "No weather data found for " + city);
+                response.put("message", "No weather data found for " + location);
                 return ResponseEntity.status(404).body(response);
             }
             return ResponseEntity.ok(weather);
         } catch (Exception e) {
             Map<String, String> error = new HashMap<>();
-            error.put("error", "Error fetching weather for " + city + ": " + e.getMessage());
+            error.put("error", "Error fetching weather for " + location + ": " + e.getMessage());
             return ResponseEntity.status(500).body(error);
         }
     }
 
-    @GetMapping("/history/{city}")
+    @GetMapping("/history/{location}")
     public ResponseEntity<?> getWeatherHistory(
-            @PathVariable String city,
+            @PathVariable String location,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime) {
         try {
@@ -69,10 +69,10 @@ public class WeatherController {
                 endTime = LocalDateTime.now();
             }
 
-            List<Weather> history = weatherService.getRainfallHistory(city, startTime, endTime);
+            List<Weather> history = weatherService.getRainfallHistory(location, startTime, endTime);
             if (history.isEmpty()) {
                 Map<String, String> response = new HashMap<>();
-                response.put("message", "No weather history found for " + city);
+                response.put("message", "No weather history found for " + location);
                 return ResponseEntity.ok(response);
             }
             return ResponseEntity.ok(history);
