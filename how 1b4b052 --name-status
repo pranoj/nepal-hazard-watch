@@ -1,9 +1,0 @@
-[33m1b4b052[m[33m ([m[1;31morigin/feature/phase-4-real-data[m[33m, [m[1;32mfeature/phase-4-real-data[m[33m)[m Phase 4: Add earthquake alert status endpoint with time-based detection
-[33m121e834[m[33m ([m[1;32mfeature/map-visualization[m[33m)[m Add map visualization with Leaflet showing regions and hazard events
-[33m2a5548a[m[33m ([m[1;32mbugfix/hazard-events-empty[m[33m)[m Fix: Remove status filter from hazard events endpoint to show all events
-[33ma095041[m Remove docs
-[33m754b5e6[m Phase 2: Frontend-backend integration with API hooks and reusable components
-[33m15c6424[m Phase 1 complete: Spring Boot backend with REST APIs, database migrations, and data seeding
-[33m3a1ca18[m Phase 1 complete: Spring Boot backend with REST APIs, database migrations, and data seeding
-[33m9c20bcb[m Add Spring Boot API endpoints for data-sources, regions, hazard-events; Flyway migrations create database schema
-[33mdb601c6[m feat(backend): add Spring Boot 3.3 scaffold
