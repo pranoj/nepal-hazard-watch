@@ -3,13 +3,11 @@ import { DataSourcesList } from './DataSourcesList';
 import { HazardEventsList } from './HazardEventsList';
 import { Map } from './Map';
 import { AlertStatus } from './AlertStatus';
-import { useRegions } from '../api/useRegions';
 import { useDataSources } from '../api/useDataSources';
-import { useHazardEvents } from '../api/useHazardEvents';
+import { useGlofRiskMap } from '../api/useGlofRiskMap';
 
 export function Dashboard() {
-    const { regions } = useRegions();
-    const { hazardEvents } = useHazardEvents();
+    const { risks } = useGlofRiskMap();
     useDataSources(); // Just load it
 
     return (
@@ -21,7 +19,7 @@ export function Dashboard() {
 
             <AlertStatus />
 
-            <Map regions={regions} hazardEvents={hazardEvents} />
+            <Map glofRisks={risks} />
             <RegionsList />
             <DataSourcesList />
             <HazardEventsList />
