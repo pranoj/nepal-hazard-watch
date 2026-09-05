@@ -59,6 +59,10 @@ public class ICIMODGlacialLakeDTO {
     @CsvBindByPosition(position = 23)
     private String province;
 
+    @CsvBindByName(column = "River_Basin")
+    @CsvBindByPosition(position = 24)
+    private String riverBasin;
+
     @CsvBindByName(column = "Lake_type")
     @CsvBindByPosition(position = 17)
     private String lakeType;
@@ -88,7 +92,7 @@ public class ICIMODGlacialLakeDTO {
 
         return GlacialLake.builder()
                 .icimodId(icimodId)
-                .lakeName(this.lakeName != null ? this.lakeName : "Unknown")
+                .lakeName(resolveLakeName(icimodId))
                 .glacierName(this.glacierName)
                 .latitude(this.latLake)
                 .longitude(this.lonLake)
@@ -96,10 +100,46 @@ public class ICIMODGlacialLakeDTO {
                 .surfaceAreaKm2(this.area)
                 .country(this.country)
                 .riskLevel(riskLevel)
+                .transboundary("Y".equalsIgnoreCase(this.transboundary))
+                .riverBasin(isKnownName(this.riverBasin) ? this.riverBasin.trim() : null)
                 .lastUpdated(LocalDateTime.now())
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
+    }
+
+    /**
+     * The ICIMOD source data itself often stores the literal string
+     * "Unknown"/"Unnamed" for Lake_name (not a blank we're defaulting).
+     * Fall through progressively less specific but still real fields -
+     * glacier, then river basin, then province - before resorting to a
+     * bare ID, so a name always tells you at least roughly where the lake is.
+     */
+    private String resolveLakeName(String icimodId) {
+        if (isKnownName(this.lakeName)) {
+            return this.lakeName.trim();
+        }
+        if (isKnownName(this.glacierName)) {
+            return this.glacierName.trim() + " Glacier Lake";
+        }
+        if (isKnownName(this.riverBasin)) {
+            return "Unnamed Lake, " + this.riverBasin.trim() + " Basin";
+        }
+        if (isKnownName(this.province)) {
+            return "Unnamed Lake, " + this.province.trim();
+        }
+        return "Unnamed Lake (" + icimodId + ")";
+    }
+
+    private boolean isKnownName(String value) {
+        if (value == null) {
+            return false;
+        }
+        String trimmed = value.trim();
+        return !trimmed.isEmpty()
+                && !trimmed.equalsIgnoreCase("Unknown")
+                && !trimmed.equalsIgnoreCase("Unnamed")
+                && !trimmed.equalsIgnoreCase("NA");
     }
 
     private String inferRiskLevel() {

@@ -67,8 +67,13 @@ public interface GlacialLakeRepository extends JpaRepository<GlacialLake, Long> 
     List<GlacialLake> findHighRiskLakesByCountry(@Param("country") String country);
 
     /**
-     * Find all glacial lakes in Nepal (convenience method)
+     * Find all glacial lakes relevant to Nepal: lakes physically inside
+     * Nepal, plus transboundary lakes (e.g. in Tibet/China) within Nepal's
+     * border envelope that can still flood Nepal directly - such as the
+     * lake behind the Aug 2026 Kyirong-Rasuwa GLOF.
      */
-    @Query("SELECT g FROM GlacialLake g WHERE g.country = 'Nepal' ORDER BY g.latitude DESC, g.longitude ASC")
+    @Query("SELECT g FROM GlacialLake g WHERE g.country = 'Nepal' "
+            + "OR (g.transboundary = true AND g.latitude BETWEEN 26.0 AND 30.5 AND g.longitude BETWEEN 80.0 AND 88.5) "
+            + "ORDER BY g.latitude DESC, g.longitude ASC")
     List<GlacialLake> findAllLakesInNepal();
 }

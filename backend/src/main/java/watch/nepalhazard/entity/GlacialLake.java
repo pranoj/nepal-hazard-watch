@@ -84,6 +84,22 @@ public class GlacialLake {
     private String riskLevel;
 
     /**
+     * True if ICIMOD flags this lake as transboundary - it may sit outside
+     * Nepal (e.g. Tibet/China) while still draining into and flooding Nepal
+     * directly, as with the Aug 2026 Kyirong-Rasuwa GLOF.
+     */
+    @Column(name = "transboundary", nullable = false)
+    private Boolean transboundary;
+
+    /**
+     * ICIMOD's named river basin (e.g. "Dudh Koshi", "Humla") - the join key
+     * for mapping which downstream towns/corridors this lake's water flows
+     * through.
+     */
+    @Column(name = "river_basin")
+    private String riverBasin;
+
+    /**
      * Timestamp when this data was last updated from ICIMOD
      */
     @Column(name = "last_updated")

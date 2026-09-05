@@ -164,21 +164,46 @@ public class ICIMODGlacialLakeService {
         }
     }
 
+    // Nepal's rough bounding box - matches earthquake.nepal in application.yml.
+    // Used to admit transboundary lakes (e.g. in Tibet/China) that still
+    // drain into and flood Nepal directly, without pulling in unrelated
+    // transboundary lakes from other Himalayan border regions in the CSV.
+    private static final double NEPAL_LAT_MIN = 26.0;
+    private static final double NEPAL_LAT_MAX = 30.5;
+    private static final double NEPAL_LON_MIN = 80.0;
+    private static final double NEPAL_LON_MAX = 88.5;
+
     /**
-     * Filter glacial lake records for Nepal only
-     * Focuses analysis on Nepal's glacial lakes and their GLOF risk
-     * 
+     * Filter glacial lake records relevant to Nepal: lakes physically inside
+     * Nepal, plus lakes ICIMOD flags as transboundary that sit within
+     * Nepal's border envelope (e.g. the Aug 2026 Kyirong-Rasuwa GLOF
+     * originated from a Tibetan lake just across the border).
+     *
      * @param allLakes All glacial lake records from ICIMOD database
-     * @return Filtered list containing only Nepal records
+     * @return Filtered list of records relevant to Nepal's flood risk
      */
     private List<ICIMODGlacialLakeDTO> filterForNepal(List<ICIMODGlacialLakeDTO> allLakes) {
         return allLakes.stream()
-                .filter(lake -> lake.getCountry() != null && lake.getCountry().equalsIgnoreCase("Nepal"))
-                .peek(lake -> log.debug("Including Nepal glacier lake: {} at ({}, {})",
+                .filter(this::isRelevantToNepal)
+                .peek(lake -> log.debug("Including glacier lake relevant to Nepal: {} at ({}, {})",
                         lake.getLakeName(),
                         lake.getLatLake(),
                         lake.getLonLake()))
                 .collect(Collectors.toList());
+    }
+
+    private boolean isRelevantToNepal(ICIMODGlacialLakeDTO lake) {
+        if (lake.getCountry() != null && lake.getCountry().equalsIgnoreCase("Nepal")) {
+            return true;
+        }
+
+        boolean isTransboundary = "Y".equalsIgnoreCase(lake.getTransboundary());
+        if (!isTransboundary || lake.getLatLake() == null || lake.getLonLake() == null) {
+            return false;
+        }
+
+        return lake.getLatLake() >= NEPAL_LAT_MIN && lake.getLatLake() <= NEPAL_LAT_MAX
+                && lake.getLonLake() >= NEPAL_LON_MIN && lake.getLonLake() <= NEPAL_LON_MAX;
     }
 
     /**
@@ -192,28 +217,20 @@ public class ICIMODGlacialLakeService {
     public boolean saveOrUpdateLake(GlacialLake lake) {
         try {
             Optional<GlacialLake> existing = glacialLakeRepository.findByIcimodId(lake.getIcimodId());
+            boolean isNew = existing.isEmpty();
 
-            if (existing.isPresent()) {
-                // Update existing lake
-                GlacialLake existingLake = existing.get();
-                existingLake.setLakeName(lake.getLakeName());
-                existingLake.setGlacierName(lake.getGlacierName());
-                existingLake.setLatitude(lake.getLatitude());
-                existingLake.setLongitude(lake.getLongitude());
-                existingLake.setElevation(lake.getElevation());
-                existingLake.setSurfaceAreaKm2(lake.getSurfaceAreaKm2());
-                existingLake.setRiskLevel(lake.getRiskLevel());
-                existingLake.setLastUpdated(LocalDateTime.now());
+            // Reuse the existing row's id (if any) so save() updates every
+            // field on the freshly-parsed lake in one shot, rather than
+            // manually copying each field one-by-one - a list that silently
+            // goes stale every time a new field is added (as happened with
+            // transboundary and riverBasin before this).
+            existing.ifPresent(existingLake -> lake.setId(existingLake.getId()));
+            lake.setLastUpdated(LocalDateTime.now());
+            glacialLakeRepository.save(lake);
 
-                glacialLakeRepository.save(existingLake);
-                log.debug("Updated existing glacial lake: {}", lake.getIcimodId());
-                return false;
-            } else {
-                // Save new lake
-                glacialLakeRepository.save(lake);
-                log.debug("Saved new glacial lake: {} ({})", lake.getIcimodId(), lake.getLakeName());
-                return true;
-            }
+            log.debug("{} glacial lake: {} ({})", isNew ? "Saved new" : "Updated existing",
+                    lake.getIcimodId(), lake.getLakeName());
+            return isNew;
         } catch (Exception e) {
             log.error("Error saving/updating glacial lake {}: {}", lake.getIcimodId(), e.getMessage(), e);
             throw new RuntimeException("Failed to save glacial lake", e);
