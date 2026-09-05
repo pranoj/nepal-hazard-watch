@@ -72,13 +72,17 @@ earthquake:
     api-url: https://earthquake.usgs.gov/fdsnws/event/1/query
     fetch-interval-ms: 600000
     min-magnitude: 4.0
-    max-radius-km: 180
+    max-radius-km: 220
     timeout-seconds: 30
     retry-attempts: 3
 
+  # Widened north of Nepal's actual border (26.0-30.4 lat) to also catch
+  # seismic activity (including landslide-type detections) just across the
+  # border in Tibet/China - glacier-fed rivers don't stop at the border,
+  # and the Aug 2026 Kyirong-Rasuwa GLOF originated from that side.
   nepal:
     latitude-min: 26.0
-    latitude-max: 30.5
+    latitude-max: 31.5
     longitude-min: 80.0
     longitude-max: 88.5
 
@@ -107,10 +111,7 @@ weather:
   api-url: ${WEATHER_API_URL:https://api.openweathermap.org/data/2.5}
   api-key: ${WEATHER_API_KEY:your-api-key-here}
   fetch-interval-ms: 1800000
-  nepal-cities:
-    - name: Kathmandu
-      latitude: 27.7172
-      longitude: 85.3240
-    - name: Pokhara
-      latitude: 28.2096
-      longitude: 83.9856
+  timeout-seconds: 15
+
+glof:
+  risk-scan-interval-ms: 1800000

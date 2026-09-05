@@ -25,7 +25,7 @@ public class LatestEarthquakeController {
 
     @GetMapping
     public LatestEarthquakeResponse getLatestEarthquake() {
-        HazardEvent latest = hazardEventRepository.findTopByOrderByEventTimeDesc();
+        HazardEvent latest = hazardEventRepository.findTopByEventTypeOrderByEventTimeDesc("EARTHQUAKE");
 
         if (latest == null) {
             return LatestEarthquakeResponse.noEarthquakes();

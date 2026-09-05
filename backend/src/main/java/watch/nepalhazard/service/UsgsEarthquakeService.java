@@ -1,25 +1,29 @@
 package watch.nepalhazard.service;
 
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import watch.nepalhazard.entity.HazardEvent;
 import watch.nepalhazard.repository.HazardEventRepository;
+import watch.nepalhazard.repository.RegionRepository;
 
+@Slf4j
 @Service
 @ConfigurationProperties(prefix = "earthquake")
 public class UsgsEarthquakeService {
 
     private final HazardEventRepository hazardEventRepository;
+    private final RegionRepository regionRepository;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
@@ -29,16 +33,21 @@ public class UsgsEarthquakeService {
     private List<Map<String, Object>> queryRegions;
 
     @Autowired
-    public UsgsEarthquakeService(HazardEventRepository hazardEventRepository) {
+    public UsgsEarthquakeService(HazardEventRepository hazardEventRepository, RegionRepository regionRepository) {
         this.hazardEventRepository = hazardEventRepository;
-        this.restTemplate = new RestTemplate();
+        this.regionRepository = regionRepository;
+
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(15000);
+        factory.setReadTimeout(20000);
+        this.restTemplate = new RestTemplate(factory);
         this.objectMapper = new ObjectMapper();
     }
 
     @Scheduled(fixedRateString = "${earthquake.usgs.fetch-interval-ms}")
     public void fetchEarthquakes() {
         try {
-            System.out.println("🔄 Fetching earthquakes from USGS...");
+            log.info("Fetching earthquakes from USGS...");
             int totalCount = 0;
 
             for (Map<String, Object> region : queryRegions) {
@@ -46,22 +55,26 @@ public class UsgsEarthquakeService {
                 double lat = ((Number) region.get("latitude")).doubleValue();
                 double lon = ((Number) region.get("longitude")).doubleValue();
 
-                System.out.println("📍 Querying " + regionName + " region (" + lat + ", " + lon + ")...");
-
                 String params = "format=geojson&"
-                        + "starttime=" + getPast24Hours() + "&"
+                        + "orderby=time&"
+                        + "limit=10&"
                         + "minmagnitude=" + usgs.getMinMagnitude() + "&"
                         + "latitude=" + lat + "&"
                         + "longitude=" + lon + "&"
-                        + "maxradius=" + usgs.getMaxRadiusKm();
+                        + "maxradiuskm=" + usgs.getMaxRadiusKm();
 
                 String url = usgs.getApiUrl() + "?" + params;
-                System.out.println("📡 API URL: " + url);
 
-                String response = restTemplate.getForObject(url, String.class);
+                String response;
+                try {
+                    response = restTemplate.getForObject(url, String.class);
+                } catch (Exception e) {
+                    log.error("USGS request failed for {} region: {}", regionName, e.getMessage());
+                    continue;
+                }
 
                 if (response == null || response.isEmpty()) {
-                    System.out.println("⚠️  No response from " + regionName + " query");
+                    log.warn("No response from {} query", regionName);
                     continue;
                 }
 
@@ -80,14 +93,13 @@ public class UsgsEarthquakeService {
                     }
                 }
 
-                System.out.println("✅ " + regionName + " region: Added " + regionCount + " earthquakes");
+                log.info("{} region: Added {} earthquakes", regionName, regionCount);
             }
 
-            System.out.println("✅ Total earthquakes added: " + totalCount);
+            log.info("Total earthquakes added: {}", totalCount);
 
         } catch (Exception e) {
-            System.err.println("❌ Error fetching earthquakes: " + e.getMessage());
-            e.printStackTrace();
+            log.error("Error fetching earthquakes: {}", e.getMessage(), e);
         }
     }
 
@@ -101,18 +113,22 @@ public class UsgsEarthquakeService {
             double latitude = coordinates.get(1).asDouble();
             double depth = coordinates.get(2).asDouble();
             double magnitude = properties.path("mag").asDouble();
-            long time = properties.path("time").asLong();
             String title = properties.path("title").asText();
+            String sourceType = properties.path("type").asText(null);
 
             HazardEvent event = new HazardEvent();
             event.setEventType("EARTHQUAKE");
+            event.setSourceType(sourceType);
             event.setLatitude(latitude);
             event.setLongitude(longitude);
             event.setMagnitude(magnitude);
+            event.setDepth(depth);
             event.setEventTime(LocalDateTime.now());
             event.setStatus("CONFIRMED");
             event.setDescription(title + " (Depth: " + String.format("%.1f", depth) + "km)");
             event.setDeathToll(0);
+            regionRepository.findNearestRegion(latitude, longitude)
+                    .ifPresent(region -> event.setRegionId(region.getId()));
 
             String riskAssessment = assessGLOFRisk(magnitude, latitude);
             event.setDescription(event.getDescription() + " | " + riskAssessment);
@@ -120,7 +136,7 @@ public class UsgsEarthquakeService {
             return event;
 
         } catch (Exception e) {
-            System.err.println("Error parsing earthquake: " + e.getMessage());
+            log.error("Error parsing earthquake: {}", e.getMessage());
             return null;
         }
     }
@@ -147,22 +163,8 @@ public class UsgsEarthquakeService {
     }
 
     private boolean earthquakeExists(HazardEvent event) {
-        List<HazardEvent> existing = hazardEventRepository.findAll();
-        for (HazardEvent e : existing) {
-            if (e.getEventType().equals("EARTHQUAKE")
-                    && Math.abs(e.getMagnitude() - event.getMagnitude()) < 0.1
-                    && Math.abs(e.getLatitude() - event.getLatitude()) < 0.1
-                    && Math.abs(e.getLongitude() - event.getLongitude()) < 0.1) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private String getPast24Hours() {
-        LocalDateTime past24 = LocalDateTime.now().minusHours(24);
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
-        return past24.format(formatter);
+        return hazardEventRepository.existsSimilarEarthquake(event.getMagnitude(), event.getLatitude(),
+                event.getLongitude());
     }
 
     public void setUsgs(Usgs usgs) {
