@@ -94,6 +94,14 @@ public class GlofRiskAssessment {
     private Boolean landslideDetected;
 
     /**
+     * Predictive signal (steep terrain + sustained heavy rain), distinct
+     * from landslideDetected which requires an actual observed event.
+     * Glacier rows only - lakes have no terrain slope data.
+     */
+    @Column(name = "landslide_pre_condition", nullable = false)
+    private Boolean landslidePreCondition;
+
+    /**
      * NORMAL / ELEVATED / HEAVY, derived from current + cumulative rainfall.
      */
     @Column(name = "rainfall_condition")

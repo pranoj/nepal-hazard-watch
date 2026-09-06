@@ -32,6 +32,17 @@ spring:
     validateOnMigrate: false
     outOfOrder: true
 
+  # Spring's default @Scheduled executor is a single thread shared by every
+  # @Scheduled method in the app. If one job (weather/earthquake/risk-scan)
+  # ever stalls on a slow outbound call, that one thread gets tied up and
+  # every other scheduled job silently stops firing too, with no exception
+  # logged, until the app restarts. A small dedicated pool means one stuck
+  # job can no longer freeze the rest of the pipeline.
+  task:
+    scheduling:
+      pool:
+        size: 4
+
 server:
   port: ${PORT:8080}
   servlet:

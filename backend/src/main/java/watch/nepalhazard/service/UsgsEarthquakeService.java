@@ -1,6 +1,8 @@
 package watch.nepalhazard.service;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -115,6 +117,13 @@ public class UsgsEarthquakeService {
             double magnitude = properties.path("mag").asDouble();
             String title = properties.path("title").asText();
             String sourceType = properties.path("type").asText(null);
+            long occurredAtMillis = properties.path("time").asLong();
+            // USGS "time" is epoch millis UTC - the actual quake time, not
+            // fetch time. Stored in UTC regardless of server timezone; the
+            // frontend converts to Nepal Time for display.
+            LocalDateTime eventTime = occurredAtMillis > 0
+                    ? Instant.ofEpochMilli(occurredAtMillis).atZone(ZoneOffset.UTC).toLocalDateTime()
+                    : LocalDateTime.now(ZoneOffset.UTC);
 
             HazardEvent event = new HazardEvent();
             event.setEventType("EARTHQUAKE");
@@ -123,7 +132,7 @@ public class UsgsEarthquakeService {
             event.setLongitude(longitude);
             event.setMagnitude(magnitude);
             event.setDepth(depth);
-            event.setEventTime(LocalDateTime.now());
+            event.setEventTime(eventTime);
             event.setStatus("CONFIRMED");
             event.setDescription(title + " (Depth: " + String.format("%.1f", depth) + "km)");
             event.setDeathToll(0);

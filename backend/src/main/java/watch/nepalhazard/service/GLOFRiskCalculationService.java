@@ -1,6 +1,8 @@
 package watch.nepalhazard.service;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,49 +11,69 @@ import watch.nepalhazard.entity.GlacialLake;
 import watch.nepalhazard.entity.Glacier;
 import watch.nepalhazard.entity.GlofRiskAssessment;
 import watch.nepalhazard.entity.HazardEvent;
+import watch.nepalhazard.entity.RiverBasinTown;
 import watch.nepalhazard.entity.Weather;
 import watch.nepalhazard.repository.HazardEventRepository;
+import watch.nepalhazard.repository.RiverBasinTownRepository;
 import watch.nepalhazard.repository.WeatherRepository;
 
 @Service
 public class GLOFRiskCalculationService {
 
     private static final long EARTHQUAKE_LOOKBACK_DAYS = 30;
-    private static final double LANDSLIDE_DETECTION_RADIUS_KM = 100.0;
+    // Aftershocks decay roughly 1/time (Omori's law), so quake hazard fades
+    // exponentially with age instead of cutting off sharply at 30 days.
+    // Half-decay at 12 days: ~37% left at 12 days, ~8% at 30.
+    private static final double EARTHQUAKE_TIME_DECAY_DAYS = 12.0;
+    // Tighter than the earthquake radius/window on purpose - a landslide
+    // is localized, so the WATCH floor should only trigger for lakes
+    // actually near it, not everything within a loose national radius.
+    private static final double LANDSLIDE_FLOOR_RADIUS_KM = 30.0;
+    private static final long LANDSLIDE_FLOOR_LOOKBACK_DAYS = 7;
+    // A landslide stays in its own valley, so proximity alone isn't enough -
+    // also require the same river basin (nearest curated basin town) where
+    // that's resolvable. Doesn't apply to earthquakes, which aren't confined
+    // to a watershed.
+    private static final double BASIN_MATCH_MAX_KM = 60.0;
     private static final List<String> ALERT_ORDER = List.of("NORMAL", "WATCH", "DANGER", "EXTREME");
 
     private final WeatherRepository weatherRepository;
     private final HazardEventRepository hazardEventRepository;
+    private final RiverBasinTownRepository riverBasinTownRepository;
 
     @Autowired
     public GLOFRiskCalculationService(WeatherRepository weatherRepository,
-            HazardEventRepository hazardEventRepository) {
+            HazardEventRepository hazardEventRepository,
+            RiverBasinTownRepository riverBasinTownRepository) {
         this.weatherRepository = weatherRepository;
         this.hazardEventRepository = hazardEventRepository;
+        this.riverBasinTownRepository = riverBasinTownRepository;
     }
 
     /**
-     * Automatic, standalone risk assessment for a single lake, using real
-     * weather at that lake's own coordinates, lake type susceptibility (from
-     * ICIMOD), season, and any recent nearby earthquake or landslide
-     * detection. Does not require any of these to have occurred - rainfall/
-     * lake-type/season alone can carry a lake into WATCH/DANGER.
-     *
-     * A recent landslide detection or HEAVY rainfall condition also applies
-     * a minimum alert-level floor, so a single strong direct signal can't
-     * get diluted away by an otherwise-low weighted average.
+     * Risk assessment for a single lake: weather, ICIMOD lake type, season,
+     * and any recent nearby earthquake or landslide. A detected landslide
+     * or HEAVY rainfall also forces a minimum WATCH floor regardless of the
+     * weighted score.
      */
     public GlofRiskAssessment assessLake(GlacialLake lake) {
         RainfallAssessment rainfall = assessRainfall(lake.getIcimodId(), lake.getLatitude(), lake.getLongitude());
         double lakeTypeFactor = calculateLakeTypeFactor(lake.getRiskLevel());
         double seasonalModifier = calculateSeasonalModifier(LocalDateTime.now());
         boolean meltCondition = calculateMeltCondition(lake.getIcimodId(), lake.getLatitude(), lake.getLongitude());
+        double massWeight = calculateMassWeight(lake.getSurfaceAreaKm2());
+        // No slope data for lakes, so the steep+wet pre-condition only
+        // applies to glaciers - see assessGlacier().
+        boolean landslidePreCondition = false;
 
         EarthquakeInfluence eqInfluence = findStrongestNearbyEarthquake(lake.getLatitude(), lake.getLongitude());
-        LandslideInfluence lsInfluence = findStrongestNearbyLandslide(lake.getLatitude(), lake.getLongitude());
+        LandslideInfluence lsInfluence = findStrongestNearbyLandslide(lake.getLatitude(), lake.getLongitude(),
+                lake.getRiverBasin());
+        double earthquakeHazard = eqInfluence.hazard() * massWeight;
+        double landslideHazard = lsInfluence.hazard() * massWeight;
 
-        double riskScore = 20 * eqInfluence.hazard()
-                + 25 * lsInfluence.hazard()
+        double riskScore = 20 * earthquakeHazard
+                + 25 * landslideHazard
                 + 25 * rainfall.hazard()
                 + 20 * lakeTypeFactor
                 + 10 * seasonalModifier;
@@ -76,11 +98,12 @@ public class GLOFRiskCalculationService {
         assessment.setRiskScore(riskScore);
         assessment.setAlertLevel(alertLevel);
         assessment.setRainfallComponent(rainfall.hazard());
-        assessment.setEarthquakeComponent(eqInfluence.hazard());
+        assessment.setEarthquakeComponent(earthquakeHazard);
         assessment.setLakeTypeComponent(lakeTypeFactor);
         assessment.setSeasonalComponent(seasonalModifier);
-        assessment.setLandslideComponent(lsInfluence.hazard());
+        assessment.setLandslideComponent(landslideHazard);
         assessment.setLandslideDetected(lsInfluence.detected());
+        assessment.setLandslidePreCondition(landslidePreCondition);
         assessment.setRainfallCondition(rainfall.condition());
         assessment.setMeltCondition(meltCondition);
         assessment.setNearestEarthquakeId(
@@ -90,12 +113,10 @@ public class GLOFRiskCalculationService {
     }
 
     /**
-     * "Type B" risk assessment for a glacier watch point - a steep terminus
-     * near a known river corridor that can collapse and dam the river
-     * directly, without any pre-existing lake (as happened at Langtang
-     * Lirung on Aug 2026). Mirrors assessLake(), substituting a terrain-
-     * steepness factor (from RGI slope_deg) for lake-type susceptibility,
-     * since glaciers have no ICIMOD risk classification.
+     * Risk assessment for a glacier watch point - a steep terminus near a
+     * river that can collapse and dam it directly, without an existing lake
+     * (Langtang Lirung, Aug 2026, is the real example). Same shape as
+     * assessLake(), with RGI slope replacing ICIMOD lake type.
      */
     public GlofRiskAssessment assessGlacier(Glacier glacier) {
         RainfallAssessment rainfall = assessRainfall(glacier.getRgiId(), glacier.getTerminusLatitude(),
@@ -104,14 +125,18 @@ public class GLOFRiskCalculationService {
         double seasonalModifier = calculateSeasonalModifier(LocalDateTime.now());
         boolean meltCondition = calculateMeltCondition(glacier.getRgiId(), glacier.getTerminusLatitude(),
                 glacier.getTerminusLongitude());
+        double massWeight = calculateMassWeight(glacier.getAreaKm2());
+        boolean landslidePreCondition = calculateLandslidePreCondition(glacier.getSlopeDeg(), rainfall.condition());
 
         EarthquakeInfluence eqInfluence = findStrongestNearbyEarthquake(glacier.getTerminusLatitude(),
                 glacier.getTerminusLongitude());
         LandslideInfluence lsInfluence = findStrongestNearbyLandslide(glacier.getTerminusLatitude(),
-                glacier.getTerminusLongitude());
+                glacier.getTerminusLongitude(), glacier.getNearestRiverBasin());
+        double earthquakeHazard = eqInfluence.hazard() * massWeight;
+        double landslideHazard = lsInfluence.hazard() * massWeight;
 
-        double riskScore = 20 * eqInfluence.hazard()
-                + 25 * lsInfluence.hazard()
+        double riskScore = 20 * earthquakeHazard
+                + 25 * landslideHazard
                 + 25 * rainfall.hazard()
                 + 20 * steepnessFactor
                 + 10 * seasonalModifier;
@@ -122,6 +147,9 @@ public class GLOFRiskCalculationService {
             alertLevel = escalate(alertLevel, "WATCH");
         }
         if ("HEAVY".equals(rainfall.condition())) {
+            alertLevel = escalate(alertLevel, "WATCH");
+        }
+        if (landslidePreCondition) {
             alertLevel = escalate(alertLevel, "WATCH");
         }
 
@@ -136,17 +164,44 @@ public class GLOFRiskCalculationService {
         assessment.setRiskScore(riskScore);
         assessment.setAlertLevel(alertLevel);
         assessment.setRainfallComponent(rainfall.hazard());
-        assessment.setEarthquakeComponent(eqInfluence.hazard());
+        assessment.setEarthquakeComponent(earthquakeHazard);
         assessment.setLakeTypeComponent(steepnessFactor);
         assessment.setSeasonalComponent(seasonalModifier);
-        assessment.setLandslideComponent(lsInfluence.hazard());
+        assessment.setLandslideComponent(landslideHazard);
         assessment.setLandslideDetected(lsInfluence.detected());
+        assessment.setLandslidePreCondition(landslidePreCondition);
         assessment.setRainfallCondition(rainfall.condition());
         assessment.setMeltCondition(meltCondition);
         assessment.setNearestEarthquakeId(
                 lsInfluence.eventId() != null ? lsInfluence.eventId() : eqInfluence.earthquakeId());
         assessment.setAssessedAt(LocalDateTime.now());
         return assessment;
+    }
+
+    /**
+     * Scales earthquake/landslide hazard by the point's real area (bigger
+     * lake or glacier = more mass in motion under the same shaking).
+     * Ranges 0.5 (unknown/tiny) to 1.0 (10km2+).
+     */
+    double calculateMassWeight(Double areaKm2) {
+        if (areaKm2 == null || areaKm2 <= 0) {
+            return 0.5;
+        }
+        return Math.max(0.5, Math.min(1.0, 0.5 + (areaKm2 / 10.0) * 0.5));
+    }
+
+    /**
+     * Steep terrain plus sustained heavy rain: a "conditions look dangerous
+     * right now" flag, ahead of any actual observed landslide. Only glaciers
+     * have slope data, so lakes always get false here.
+     */
+    boolean calculateLandslidePreCondition(Double slopeDeg, String rainfallCondition) {
+        if (slopeDeg == null) {
+            return false;
+        }
+        boolean steepEnough = slopeDeg >= 40.0;
+        boolean wetEnough = "ELEVATED".equals(rainfallCondition) || "HEAVY".equals(rainfallCondition);
+        return steepEnough && wetEnough;
     }
 
     private double calculateEarthquakeHazard(
@@ -171,15 +226,14 @@ public class GLOFRiskCalculationService {
     }
 
     /**
-     * Finds the recent (last 30 days) tectonic earthquake whose magnitude/
-     * distance/depth combination produces the largest hazard contribution
-     * for this lake - not simply the nearest or the strongest in isolation,
-     * since a large-but-far quake can matter more than a small-but-close
-     * one. Landslide-type detections are excluded here; see
-     * findStrongestNearbyLandslide().
+     * Picks the last-30-days earthquake with the largest combined
+     * magnitude/distance/depth/age hazard for this point, not just the
+     * nearest or the strongest. Landslide-type detections are handled
+     * separately by findStrongestNearbyLandslide(), which has no time decay.
      */
     private EarthquakeInfluence findStrongestNearbyEarthquake(double lakeLat, double lakeLon) {
-        LocalDateTime since = LocalDateTime.now().minusDays(EARTHQUAKE_LOOKBACK_DAYS);
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        LocalDateTime since = now.minusDays(EARTHQUAKE_LOOKBACK_DAYS);
         List<HazardEvent> recentEarthquakes = hazardEventRepository.findRecentEarthquakes(since);
 
         double bestHazard = 0.0;
@@ -192,6 +246,12 @@ public class GLOFRiskCalculationService {
                     eq.getLatitude(), eq.getLongitude(),
                     lakeLat, lakeLon);
 
+            if (eq.getEventTime() != null) {
+                double daysAgo = Duration.between(eq.getEventTime(), now).toMinutes() / (24.0 * 60.0);
+                double timeDecay = Math.exp(-Math.max(0, daysAgo) / EARTHQUAKE_TIME_DECAY_DAYS);
+                hazard *= timeDecay;
+            }
+
             if (hazard > bestHazard) {
                 bestHazard = hazard;
                 bestId = eq.getId();
@@ -202,27 +262,32 @@ public class GLOFRiskCalculationService {
     }
 
     /**
-     * Finds recent (last 30 days) USGS "landslide"-type detections near this
-     * lake - a direct seismic-network sighting of actual mass movement (e.g.
-     * an ice/rock avalanche), not just shaking that might destabilize
-     * something. "detected" is a plain proximity check (within 100km),
-     * independent of the decayed hazard value, so a real nearby detection
-     * always registers even when far enough away that the smooth decay
-     * curve alone would round it down to nearly nothing.
+     * Recent USGS "landslide"-type detections near this lake - a direct
+     * sighting of mass movement, not just shaking. Outside the scope check
+     * (30km, 7 days, same river basin where resolvable) it contributes
+     * exactly zero; inside it, hazard is graded the same way as earthquakes.
      */
-    private LandslideInfluence findStrongestNearbyLandslide(double lakeLat, double lakeLon) {
-        LocalDateTime since = LocalDateTime.now().minusDays(EARTHQUAKE_LOOKBACK_DAYS);
-        List<HazardEvent> recentLandslides = hazardEventRepository.findRecentLandslides(since);
+    private LandslideInfluence findStrongestNearbyLandslide(double lakeLat, double lakeLon, String ownBasin) {
+        LocalDateTime floorSince = LocalDateTime.now(ZoneOffset.UTC).minusDays(LANDSLIDE_FLOOR_LOOKBACK_DAYS);
+        List<HazardEvent> recentLandslides = hazardEventRepository.findRecentLandslides(floorSince);
 
         double bestHazard = 0.0;
         Long bestId = null;
-        double closestDistanceKm = Double.MAX_VALUE;
+        boolean detected = false;
 
         for (HazardEvent landslide : recentLandslides) {
             double distanceKm = haversineDistance(
                     landslide.getLatitude(), landslide.getLongitude(),
                     lakeLat, lakeLon);
-            closestDistanceKm = Math.min(closestDistanceKm, distanceKm);
+
+            boolean closeAndRecent = distanceKm <= LANDSLIDE_FLOOR_RADIUS_KM
+                    && landslide.getEventTime() != null && landslide.getEventTime().isAfter(floorSince);
+            boolean sameBasin = isSameBasin(ownBasin, landslide.getLatitude(), landslide.getLongitude());
+
+            if (!closeAndRecent || !sameBasin) {
+                continue;
+            }
+            detected = true;
 
             double depth = landslide.getDepth() != null ? landslide.getDepth() : 5.0;
             double hazard = calculateEarthquakeHazard(
@@ -236,16 +301,46 @@ public class GLOFRiskCalculationService {
             }
         }
 
-        boolean detected = closestDistanceKm <= LANDSLIDE_DETECTION_RADIUS_KM;
         return new LandslideInfluence(bestHazard, bestId, detected);
     }
 
     /**
+     * True if the event's nearest curated basin town matches the lake's own
+     * basin. No real watershed polygons, so this is a nearest-neighbor
+     * proxy. Falls back to true (don't restrict) when either side can't be
+     * resolved, so missing data never silently suppresses a real floor.
+     */
+    private boolean isSameBasin(String ownBasin, double eventLat, double eventLon) {
+        if (ownBasin == null || ownBasin.isBlank()) {
+            return true;
+        }
+        Optional<String> eventBasin = findNearestBasin(eventLat, eventLon);
+        return eventBasin.map(basin -> basin.equalsIgnoreCase(ownBasin)).orElse(true);
+    }
+
+    private Optional<String> findNearestBasin(double lat, double lon) {
+        List<RiverBasinTown> towns = riverBasinTownRepository.findAll();
+
+        String nearestBasin = null;
+        double bestDistance = Double.MAX_VALUE;
+        for (RiverBasinTown town : towns) {
+            double distanceKm = haversineDistance(town.getLatitude(), town.getLongitude(), lat, lon);
+            if (distanceKm < bestDistance) {
+                bestDistance = distanceKm;
+                nearestBasin = town.getRiverBasin();
+            }
+        }
+
+        if (nearestBasin == null || bestDistance > BASIN_MATCH_MAX_KM) {
+            return Optional.empty();
+        }
+        return Optional.of(nearestBasin);
+    }
+
+    /**
      * Rainfall hazard and condition (NORMAL/ELEVATED/HEAVY) for a location.
-     * If preferredLocationKey (a lake's icimodId) has its own weather
-     * records, uses those directly; otherwise falls back to the nearest
-     * recorded weather point by coordinate (used by the manual single-point
-     * endpoint, which has no lake identifier).
+     * Uses the location's own weather records when available, otherwise the
+     * nearest recorded weather point by coordinate.
      */
     private RainfallAssessment assessRainfall(String preferredLocationKey, double lat, double lon) {
         Optional<Weather> latestWeather = Optional.empty();
@@ -263,34 +358,43 @@ public class GLOFRiskCalculationService {
         String resolvedLocation = weather.getLocation();
         double rainfall24h = weather.getRainfall();
 
-        double baseComponent = (rainfall24h - 25.0) / 100.0;
+        double dailyComponent = Math.max(0, Math.min(1, (rainfall24h - 25.0) / 100.0));
 
         LocalDateTime now = LocalDateTime.now();
         double rainfall7day = calculateRainfallSum(resolvedLocation, now.minusDays(7), now);
         double rainfall14day = calculateRainfallSum(resolvedLocation, now.minusDays(14), now);
 
-        double cumulativeBonus;
+        // Sustained ground saturation over 1-2 weeks is its own hazard,
+        // independent of any single day's total, so it's scored separately
+        // rather than as a multiplier on dailyComponent.
+        double cumulative14Component = Math.max(0, Math.min(1, (rainfall14day - 200.0) / 200.0));
+        double cumulative7Component = Math.max(0, Math.min(1, (rainfall7day - 100.0) / 150.0));
+        double cumulativeComponent = Math.max(cumulative14Component, cumulative7Component);
+
         String condition;
         if (rainfall14day > 300.0 || rainfall24h > 50.0) {
-            cumulativeBonus = 0.4;
             condition = "HEAVY";
         } else if (rainfall7day > 150.0 || rainfall24h > 25.0) {
-            cumulativeBonus = 0.2;
             condition = "ELEVATED";
         } else {
-            cumulativeBonus = 0.0;
             condition = "NORMAL";
         }
 
-        double hazard = Math.max(0, Math.min(1, baseComponent * (1.0 + cumulativeBonus)));
+        // Below freezing, precipitation falls as snow rather than
+        // melt-driving rain, so only dampen the same-day component with it.
+        // cumulativeComponent (ground saturation) stays temperature-
+        // independent, same for the reported HEAVY/ELEVATED condition.
+        double temperatureMeltMultiplier = weather.getTemperature() == null ? 1.0
+                : Math.max(0, Math.min(1, weather.getTemperature() / 15.0));
+
+        double hazard = Math.max(0, Math.min(1,
+                Math.max(dailyComponent * temperatureMeltMultiplier, cumulativeComponent)));
         return new RainfallAssessment(hazard, condition);
     }
 
     /**
-     * Active glacier-melt indicator: recent (3-day) average temperature at
-     * this lake above freezing. Not weighted into the score directly - it's
-     * a conditioning signal surfaced to the frontend rather than a scored
-     * component, since melt alone rarely is the acute trigger.
+     * Recent (3-day) average temperature above freezing - surfaced to the
+     * frontend as context, not weighted into the score.
      */
     private boolean calculateMeltCondition(String locationKey, double lat, double lon) {
         LocalDateTime now = LocalDateTime.now();
@@ -306,11 +410,7 @@ public class GLOFRiskCalculationService {
                 .orElse(false);
     }
 
-    /**
-     * Susceptibility derived from the lake's ICIMOD-assigned risk level
-     * (lake type: ice-dammed/moraine-dammed/supraglacial, repeat-GLOF
-     * history) - real inventory data, not a placeholder.
-     */
+    /** Susceptibility from the lake's ICIMOD-assigned risk level. */
     private double calculateLakeTypeFactor(String riskLevel) {
         if (riskLevel == null) {
             return 0.4;
@@ -329,26 +429,25 @@ public class GLOFRiskCalculationService {
         }
     }
 
-    /**
-     * Terrain-steepness susceptibility for a glacier terminus, from RGI's
-     * mean slope_deg. GlacierSyncService already filters candidates to
-     * slope >= 30 degrees, so this scales that practical range (20-70)
-     * toward the high end rather than starting from 0.
-     */
+    /** Terrain-steepness susceptibility from RGI's mean slope_deg. */
     private double calculateSteepnessFactor(double slopeDeg) {
         return Math.max(0, Math.min(1, (slopeDeg - 20.0) / 50.0));
     }
 
-    private double calculateSeasonalModifier(LocalDateTime dateTime) {
-        int month = dateTime.getMonthValue();
+    /**
+     * Smooth monsoon-season curve peaking ~Jul 31, tapering to zero by
+     * ~May 1 and ~Oct 31, instead of a hard on/off month boundary.
+     */
+    double calculateSeasonalModifier(LocalDateTime dateTime) {
+        int dayOfYear = dateTime.getDayOfYear();
+        double peakDay = 212.0;
+        double halfWidthDays = 92.0;
 
-        if (month >= 6 && month <= 9) {
-            return 1.0;
-        } else if (month == 5 || month == 10) {
-            return 0.5;
-        } else {
+        double distance = Math.abs(dayOfYear - peakDay);
+        if (distance > halfWidthDays) {
             return 0.0;
         }
+        return Math.cos((distance / halfWidthDays) * (Math.PI / 2));
     }
 
     public String getAlertLevel(double riskScore) {

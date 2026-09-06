@@ -1,6 +1,7 @@
 package watch.nepalhazard.dto;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import watch.nepalhazard.entity.HazardEvent;
 import lombok.Data;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -22,9 +23,10 @@ public class EarthquakeAlertStatusResponse {
         private LocalDateTime eventTime;
         private String description;
         private String riskAssessment;
+        private String sourceType;
 
         public EarthquakeInfo(Long id, Double magnitude, Double latitude, Double longitude,
-                LocalDateTime eventTime, String description, String riskAssessment) {
+                LocalDateTime eventTime, String description, String riskAssessment, String sourceType) {
             this.id = id;
             this.magnitude = magnitude;
             this.latitude = latitude;
@@ -32,14 +34,18 @@ public class EarthquakeAlertStatusResponse {
             this.eventTime = eventTime;
             this.description = description;
             this.riskAssessment = riskAssessment;
+            this.sourceType = sourceType;
         }
     }
 
     public static EarthquakeAlertStatusResponse create(HazardEvent latest, HazardEvent previous) {
         EarthquakeAlertStatusResponse response = new EarthquakeAlertStatusResponse();
 
-        // Calculate minutes since latest earthquake
-        LocalDateTime now = LocalDateTime.now();
+        // Calculate minutes since latest earthquake. eventTime is stored as
+        // UTC (see UsgsEarthquakeService), so "now" must be UTC too - the
+        // host machine's own zone (e.g. US Central on this dev box) would
+        // silently skew this by several hours otherwise.
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         long minutesPassed = java.time.temporal.ChronoUnit.MINUTES.between(latest.getEventTime(), now);
 
         // Alert is active if earthquake happened in last 30 minutes
@@ -56,7 +62,8 @@ public class EarthquakeAlertStatusResponse {
                 latest.getLongitude(),
                 latest.getEventTime(),
                 latest.getDescription(),
-                latest.getDescription());
+                latest.getDescription(),
+                latest.getSourceType());
         response.setNewAlert(newAlert);
 
         // Add previous earthquake if it exists
@@ -68,7 +75,8 @@ public class EarthquakeAlertStatusResponse {
                     previous.getLongitude(),
                     previous.getEventTime(),
                     previous.getDescription(),
-                    previous.getDescription());
+                    previous.getDescription(),
+                    previous.getSourceType());
             response.setLastEarthquake(lastAlert);
         }
 
