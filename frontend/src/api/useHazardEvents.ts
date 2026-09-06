@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import api from './index';
 
 export interface HazardEvent {
     id: number;
-    regionId: number;
+    regionId: number | null;
     eventType: string;
+    sourceType: string | null;
     status: string;
     eventTime: string;
     latitude: number;
@@ -15,24 +16,24 @@ export interface HazardEvent {
 }
 
 export function useHazardEvents() {
-    const [hazardEvents, setHazardEvents] = useState<HazardEvent[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [events, setEvents] = useState<HazardEvent[]>([]);
 
     useEffect(() => {
-        const fetchHazardEvents = async () => {
+        const fetchEvents = async () => {
             try {
                 const response = await api.get('/hazard-events');
-                setHazardEvents(response.data);
-            } catch (err) {
-                setError(err instanceof Error ? err.message : 'Failed to fetch hazard events');
-            } finally {
-                setLoading(false);
+                if (Array.isArray(response.data)) {
+                    setEvents(response.data);
+                }
+            } catch {
+                // Leave events empty if unavailable.
             }
         };
 
-        fetchHazardEvents();
+        fetchEvents();
+        const interval = setInterval(fetchEvents, 60_000);
+        return () => clearInterval(interval);
     }, []);
 
-    return { hazardEvents, loading, error };
+    return { events };
 }

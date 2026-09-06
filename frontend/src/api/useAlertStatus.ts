@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-interface EarthquakeInfo {
+export interface EarthquakeInfo {
     id: number;
     magnitude: number;
     latitude: number;
@@ -8,6 +8,7 @@ interface EarthquakeInfo {
     eventTime: string;
     description: string;
     riskAssessment: string;
+    sourceType: string | null;
 }
 
 interface AlertStatusResponse {

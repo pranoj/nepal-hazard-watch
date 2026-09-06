@@ -19,6 +19,7 @@ export interface GlofRiskAssessment {
     seasonalComponent: number;
     landslideComponent: number;
     landslideDetected: boolean;
+    landslidePreCondition: boolean;
     rainfallCondition: 'NORMAL' | 'ELEVATED' | 'HEAVY';
     meltCondition: boolean;
     nearestEarthquakeId: number | null;

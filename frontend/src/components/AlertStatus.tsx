@@ -1,34 +1,11 @@
-import { useAlertStatus } from '../api/useAlertStatus';
 import { useGlofRiskMap, GlofRiskAssessment } from '../api/useGlofRiskMap';
 import { useDownstreamTowns, RiverBasinTown } from '../api/useDownstreamTowns';
-
-const ALERT_COLORS: Record<GlofRiskAssessment['alertLevel'], string> = {
-    NORMAL: '#16a34a',
-    WATCH: '#eab308',
-    DANGER: '#ea580c',
-    EXTREME: '#dc2626',
-};
+import { ALERT_COLORS } from '../utils/alertVisuals';
+import { AlertShapeIcon } from './AlertShapeIcon';
+import { glassCard, mutedText } from '../utils/theme';
+import { hasActiveTrigger } from '../utils/risk';
 
 const MAX_POINTS_PER_BASIN = 4;
-
-function formatTimeAgo(minutes: number): string {
-    if (minutes === 0) {
-        return `just now`;
-    } else if (minutes < 60) {
-        return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
-    } else if (minutes < 1440) {
-        const hours = Math.floor(minutes / 60);
-        const remainingMinutes = minutes % 60;
-        if (remainingMinutes === 0) {
-            return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-        } else {
-            return `${hours} hour${hours > 1 ? 's' : ''} and ${remainingMinutes} minute${remainingMinutes > 1 ? 's' : ''} ago`;
-        }
-    } else {
-        const days = Math.floor(minutes / 1440);
-        return `${days} day${days > 1 ? 's' : ''} ago`;
-    }
-}
 
 function dominantFactor(risk: GlofRiskAssessment): string {
     const isGlacier = risk.sourceType === 'GLACIER';
@@ -41,6 +18,17 @@ function dominantFactor(risk: GlofRiskAssessment): string {
     ];
     factors.sort((a, b) => b[1] - a[1]);
     return factors[0][0];
+}
+
+// "1 Lake", "2 Glaciers", or "100 Lakes and 2 Glaciers" - names the actual
+// type(s) involved instead of the generic, GIS-jargon "point".
+function describeCounts(points: GlofRiskAssessment[]): string {
+    const lakes = points.filter(p => p.sourceType !== 'GLACIER').length;
+    const glaciers = points.filter(p => p.sourceType === 'GLACIER').length;
+    const parts: string[] = [];
+    if (lakes > 0) parts.push(`${lakes} Lake${lakes > 1 ? 's' : ''}`);
+    if (glaciers > 0) parts.push(`${glaciers} Glacier${glaciers > 1 ? 's' : ''}`);
+    return parts.join(' and ');
 }
 
 function groupByBasin(risks: GlofRiskAssessment[]): Array<[string, GlofRiskAssessment[]]> {
@@ -57,30 +45,32 @@ function groupByBasin(risks: GlofRiskAssessment[]): Array<[string, GlofRiskAsses
     return [...groups.entries()].sort((a, b) => b[1].length - a[1].length);
 }
 
+function flagText(risk: GlofRiskAssessment): string | null {
+    const flags: string[] = [];
+    if (risk.landslideDetected) flags.push('⚠️ landslide detected');
+    if (risk.landslidePreCondition) flags.push('⛰️ steep + wet');
+    if (risk.rainfallCondition === 'HEAVY') flags.push('🌧️ heavy rain');
+    if (risk.meltCondition) flags.push('🌡️ melt');
+    return flags.length > 0 ? flags.join('  ·  ') : null;
+}
+
 function PointRow({ risk }: { risk: GlofRiskAssessment }) {
     const isGlacier = risk.sourceType === 'GLACIER';
+    const flags = flagText(risk);
 
     return (
-        <div style={{ padding: '0.35rem 0', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>
-                    <span style={{
-                        display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%',
-                        backgroundColor: ALERT_COLORS[risk.alertLevel], marginRight: '0.5rem'
-                    }} />
-                    {isGlacier ? '🧊' : '🏔️'} <strong>{risk.lakeName}</strong> - driven by {dominantFactor(risk)}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.15rem 0', fontSize: '0.85rem' }}>
+            <AlertShapeIcon level={risk.alertLevel} size={10} />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
+                {isGlacier ? '🧊' : '🏔️'} <strong>{risk.lakeName}</strong>
+                <span style={mutedText}> — {dominantFactor(risk)}{flags ? ` · ${flags}` : ''}</span>
+            </span>
+            <span style={{ flexShrink: 0, display: 'flex', alignItems: 'baseline', gap: '2px' }}>
+                <span style={{ fontWeight: 800, fontSize: '1.1rem', color: ALERT_COLORS[risk.alertLevel] }}>
+                    {risk.riskScore.toFixed(0)}
                 </span>
-                <span style={{ fontWeight: 'bold', color: ALERT_COLORS[risk.alertLevel] }}>
-                    {risk.riskScore.toFixed(0)}/100
-                </span>
-            </div>
-            {(risk.landslideDetected || risk.rainfallCondition === 'HEAVY' || risk.meltCondition) && (
-                <div style={{ marginLeft: '1.3rem', fontSize: '0.8rem', color: '#dc2626' }}>
-                    {risk.landslideDetected && <span>⚠️ Landslide/mass-movement detected nearby&nbsp;&nbsp;</span>}
-                    {risk.rainfallCondition === 'HEAVY' && <span>🌧️ Heavy rainfall&nbsp;&nbsp;</span>}
-                    {risk.meltCondition && <span style={{ color: '#666' }}>🌡️ Active melt</span>}
-                </div>
-            )}
+                <span style={{ ...mutedText, fontSize: '0.65rem' }}>/100</span>
+            </span>
         </div>
     );
 }
@@ -93,19 +83,21 @@ function BasinGroup({ basin, points, townsByBasin }: {
     const hidden = points.length - shown.length;
 
     return (
-        <div style={{ marginBottom: '1rem' }}>
-            <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>
-                {basin} - {points.length} point{points.length > 1 ? 's' : ''}
-            </div>
-            {downstreamTowns && downstreamTowns.length > 0 && (
-                <div style={{ fontSize: '0.85rem', color: '#555', marginBottom: '0.3rem' }}>
-                    🏘️ Downstream: {downstreamTowns.map(t => t.townName).join(' → ')}
+        <div style={{ padding: '0.3rem 0', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.6rem' }}>
+                <div style={{ fontWeight: 700, fontSize: '0.8rem', flexShrink: 0 }}>
+                    {basin} <span style={mutedText}>({points.length})</span>
                 </div>
-            )}
+                {downstreamTowns && downstreamTowns.length > 0 && (
+                    <div style={{ ...mutedText, fontSize: '0.72rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        🏘️ {downstreamTowns.map(t => t.townName).join(' → ')}
+                    </div>
+                )}
+            </div>
             {shown.map(risk => <PointRow key={risk.id} risk={risk} />)}
             {hidden > 0 && (
-                <p style={{ color: '#666', fontSize: '0.85rem', margin: '0.3rem 0 0' }}>
-                    + {hidden} more in {basin} - see the map below for the full list
+                <p style={{ ...mutedText, fontSize: '0.75rem', margin: '0.2rem 0 0' }}>
+                    + {hidden} more — see map
                 </p>
             )}
         </div>
@@ -114,67 +106,46 @@ function BasinGroup({ basin, points, townsByBasin }: {
 
 export function AlertStatus() {
     const { risks, loading: risksLoading, error: risksError } = useGlofRiskMap();
-    const { alertStatus } = useAlertStatus();
     const { townsByBasin } = useDownstreamTowns();
 
-    if (risksLoading) return <div>Loading GLOF risk status...</div>;
-    if (risksError) return <div style={{ color: 'red' }}>⚠️ {risksError}</div>;
+    if (risksLoading) return <div style={{ ...glassCard, padding: '1rem 1.25rem' }}>Loading GLOF risk status...</div>;
+    if (risksError) return <div style={{ ...glassCard, padding: '1rem 1.25rem', color: '#f87171' }}>⚠️ {risksError}</div>;
 
+    // DANGER/EXTREME always means a real trigger (static factors alone cap
+    // at 30 points). WATCH needs splitting: only show it in the loud banner
+    // if it has an actual trigger, not just a static classification.
     const critical = risks.filter(r => r.alertLevel === 'DANGER' || r.alertLevel === 'EXTREME');
-    const watch = risks.filter(r => r.alertLevel === 'WATCH');
+    const watchTriggered = risks.filter(r => r.alertLevel === 'WATCH' && hasActiveTrigger(r));
+    const watchBaseline = risks.filter(r => r.alertLevel === 'WATCH' && !hasActiveTrigger(r));
     const hasCritical = critical.length > 0;
-    const hasWatch = watch.length > 0;
+    const hasWatch = watchTriggered.length > 0;
+    const shown = hasCritical ? critical : hasWatch ? watchTriggered : [];
 
     const bannerColor = hasCritical ? '#dc2626' : hasWatch ? '#eab308' : '#16a34a';
-    const bannerBg = hasCritical ? '#fee2e2' : hasWatch ? '#fefce8' : '#f0fdf4';
     const headline = hasCritical
-        ? `🚨 ${critical.length} point${critical.length > 1 ? 's' : ''} at DANGER/EXTREME risk`
+        ? `🚨 ${describeCounts(critical)} at DANGER/EXTREME risk`
         : hasWatch
-            ? `🟡 ${watch.length} point${watch.length > 1 ? 's' : ''} under WATCH`
-            : '✅ All monitored points NORMAL';
+            ? `🟡 ${describeCounts(watchTriggered)} under WATCH`
+            : '✅ All monitored sites NORMAL';
 
     return (
-        <div style={{
-            padding: '1.5rem',
-            backgroundColor: bannerBg,
-            borderRadius: '8px',
-            marginBottom: '2rem',
-            border: `2px solid ${bannerColor}`
-        }}>
-            <h2 style={{ margin: 0 }}>{headline}</h2>
-            <p style={{ color: '#555', marginTop: '0.25rem' }}>
-                {risks.length} points monitored across Nepal (glacial lakes + glacier watch points)
-            </p>
+        <div style={{ ...glassCard, padding: '0.85rem 1.25rem', borderLeft: `4px solid ${bannerColor}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <h2 style={{ margin: 0, fontSize: '1.05rem' }}>{headline}</h2>
+                <span style={{ ...mutedText, fontSize: '0.75rem' }}>· {risks.length} sites monitored</span>
+            </div>
 
-            {hasCritical && (
-                <>
-                    <hr />
-                    <h3>🚨 Points requiring attention</h3>
-                    {groupByBasin(critical).map(([basin, points]) => (
-                        <BasinGroup key={basin} basin={basin} points={points} townsByBasin={townsByBasin} />
-                    ))}
-                </>
-            )}
+            {shown.length > 0 &&
+                groupByBasin(shown).map(([basin, points]) => (
+                    <BasinGroup key={basin} basin={basin} points={points} townsByBasin={townsByBasin} />
+                ))}
 
-            {!hasCritical && hasWatch && (
-                <>
-                    <hr />
-                    <h3>🟡 Points under enhanced monitoring</h3>
-                    {groupByBasin(watch).map(([basin, points]) => (
-                        <BasinGroup key={basin} basin={basin} points={points} townsByBasin={townsByBasin} />
-                    ))}
-                </>
-            )}
-
-            {alertStatus?.newAlert && (
-                <>
-                    <hr />
-                    <h3 style={{ fontSize: '1rem', color: '#555' }}>Most recent seismic activity</h3>
-                    <p style={{ color: '#555' }}>
-                        M{alertStatus.newAlert.magnitude} - {alertStatus.newAlert.latitude}°N, {alertStatus.newAlert.longitude}°E
-                        {' - '}{formatTimeAgo(alertStatus.minutesSinceAlert)}
-                    </p>
-                </>
+            {watchBaseline.length > 0 && (
+                <div style={{ ...mutedText, fontSize: '0.72rem', marginTop: shown.length > 0 ? '0.4rem' : '0.5rem' }}>
+                    ℹ️ {describeCounts(watchBaseline)} ({watchBaseline.map(r => r.lakeName).join(', ')}) sitting in a
+                    seasonal high-risk window right now (real ICIMOD classification + monsoon timing) but with no
+                    active trigger detected, so not counted above.
+                </div>
             )}
         </div>
     );

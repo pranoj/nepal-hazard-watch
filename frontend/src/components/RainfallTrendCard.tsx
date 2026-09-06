@@ -1,0 +1,65 @@
+import { useWeatherHistory } from '../api/useWeatherHistory';
+import { GlofRiskAssessment } from '../api/useGlofRiskMap';
+import { glassCardPad, mutedText } from '../utils/theme';
+
+interface RainfallTrendCardProps {
+    /** Follows the current highest-risk point, same as ClockWeatherCard. */
+    worst: GlofRiskAssessment | null;
+}
+
+// No real river gauge feed, so this shows daily rainfall at the highest-risk
+// point instead, bucketed from raw readings into daily totals.
+export function RainfallTrendCard({ worst }: RainfallTrendCardProps) {
+    const locationKey = worst?.icimodId ?? '348';
+    const locationLabel = worst?.lakeName ?? 'Dig Tsho';
+    const { history, loading } = useWeatherHistory(locationKey, 7);
+
+    const byDay = new Map<string, number>();
+    for (const reading of history) {
+        const day = reading.recordedAt.slice(0, 10);
+        byDay.set(day, (byDay.get(day) ?? 0) + reading.rainfall);
+    }
+    const days = [...byDay.entries()].sort(([a], [b]) => a.localeCompare(b));
+    const maxRain = Math.max(1, ...days.map(([, mm]) => mm));
+    const latestTotal = days.length > 0 ? days[days.length - 1][1] : 0;
+
+    return (
+        <div style={glassCardPad}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                <span>🌧️</span>
+                <span>Rainfall Trend</span>
+            </div>
+            <div style={{ fontSize: '2rem', fontWeight: 700 }}>{latestTotal.toFixed(1)} mm</div>
+            <div style={{ ...mutedText, fontSize: '0.8rem', marginBottom: '0.75rem', lineHeight: 1.4 }}>
+                Today, {locationLabel} (highest current risk)
+            </div>
+            {loading && <div style={mutedText}>Loading...</div>}
+            {!loading && days.length === 0 && (
+                <div style={mutedText}>
+                    No real rainfall history yet - our weather pipeline only started collecting
+                    data on Sept 3, 2026.
+                </div>
+            )}
+            {days.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px', height: '70px' }}>
+                    {days.map(([day, mm]) => (
+                        <div key={day} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
+                            <div
+                                title={`${day}: ${mm.toFixed(1)}mm`}
+                                style={{
+                                    width: '100%',
+                                    height: `${Math.max(4, (mm / maxRain) * 60)}px`,
+                                    background: 'linear-gradient(180deg, #60a5fa, #2563eb)',
+                                    borderRadius: '3px 3px 0 0',
+                                }}
+                            />
+                            <div style={{ ...mutedText, fontSize: '0.65rem', marginTop: '0.25rem' }}>
+                                {day.slice(5)}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
