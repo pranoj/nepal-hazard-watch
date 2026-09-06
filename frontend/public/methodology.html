@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Methodology: Nepal Hazard Watch</title>
+<style>
+    :root {
+        color-scheme: light;
+        --bg: #faf8f4;
+        --text: #2b2b28;
+        --muted: #6b6862;
+        --accent: #7a5230;
+        --line: #ddd6c9;
+        --card: #ffffff;
+    }
+    * { box-sizing: border-box; }
+    body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: Georgia, 'Times New Roman', serif;
+        line-height: 1.75;
+    }
+    .wrap {
+        max-width: 780px;
+        margin: 0 auto;
+        padding: 3rem 1.5rem 5rem;
+    }
+    header {
+        margin-bottom: 2.5rem;
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 1.5rem;
+    }
+    .kicker {
+        font-family: -apple-system, system-ui, sans-serif;
+        font-size: 0.8rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin-bottom: 0.5rem;
+    }
+    h1 {
+        font-size: 2rem;
+        margin: 0 0 0.5rem;
+        line-height: 1.25;
+    }
+    .subtitle {
+        color: var(--muted);
+        font-size: 1.05rem;
+        margin: 0;
+    }
+    .meta {
+        font-family: -apple-system, system-ui, sans-serif;
+        font-size: 0.8rem;
+        color: var(--muted);
+        margin-top: 1rem;
+    }
+    h2 {
+        font-size: 1.4rem;
+        margin: 2.5rem 0 1rem;
+        color: #1f1f1c;
+    }
+    h3 {
+        font-size: 1.1rem;
+        margin: 1.75rem 0 0.6rem;
+    }
+    p { margin: 0 0 1.1rem; }
+    .callout {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--accent);
+        border-radius: 4px;
+        padding: 1rem 1.25rem;
+        margin: 1.5rem 0;
+        font-size: 0.95rem;
+    }
+    .formula {
+        font-family: 'Courier New', monospace;
+        background: #f1ede3;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 1rem 1.25rem;
+        margin: 1.2rem 0;
+        overflow-x: auto;
+        font-size: 0.9rem;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 1.2rem 0;
+        font-size: 0.92rem;
+        font-family: -apple-system, system-ui, sans-serif;
+    }
+    th, td {
+        text-align: left;
+        padding: 0.5rem 0.7rem;
+        border-bottom: 1px solid var(--line);
+    }
+    th { color: var(--muted); font-weight: 600; font-size: 0.82rem; }
+    a { color: var(--accent); }
+    ul, ol { padding-left: 1.3rem; margin: 0 0 1.1rem; }
+    li { margin-bottom: 0.5rem; }
+    .refs {
+        font-family: -apple-system, system-ui, sans-serif;
+        font-size: 0.88rem;
+        list-style: none;
+        padding-left: 0;
+    }
+    .refs li {
+        margin-bottom: 1.1rem;
+        padding-left: 2rem;
+        text-indent: -2rem;
+    }
+    footer {
+        margin-top: 3rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid var(--line);
+        font-family: -apple-system, system-ui, sans-serif;
+        font-size: 0.82rem;
+        color: var(--muted);
+    }
+    .back {
+        display: inline-block;
+        margin-bottom: 1.5rem;
+        font-family: -apple-system, system-ui, sans-serif;
+        font-size: 0.85rem;
+        text-decoration: none;
+    }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<a href="/" class="back">&larr; back to the dashboard</a>
+
+<header>
+    <div class="kicker">Nepal Hazard Watch, methodology notes</div>
+    <h1>How this app actually decides a lake is risky</h1>
+    <p class="subtitle">A plain walkthrough of the scoring formula, where every input comes from, and what we are honestly not confident enough to claim yet.</p>
+    <div class="meta">Last updated September 2026. Covers 97 glacial lakes and 123 glacier watch points across Nepal.</div>
+</header>
+
+<p>We wrote this page because a risk score with no explanation behind it is just a number you have to trust blindly, and we did not want to ask anyone to do that. If a lake shows up under Watch on the dashboard, you should be able to come here and see exactly what fed into that decision: which real dataset it came from, how old the data is allowed to be before it stops counting, and where we are still guessing. Nowhere on this page are we trying to sound more certain than we are.</p>
+
+<h2>The short version</h2>
+
+<p>Every monitored lake and glacier watch point gets a composite score from 0 to 100. It is built from five weighted pieces, each one tied to a real, independently checkable dataset (USGS, n.d.; ICIMOD, n.d.; RGI Consortium, 2023; OpenWeather Ltd., n.d.):</p>
+
+<div class="formula">
+score = 20 &times; earthquake_hazard<br>
+&nbsp;&nbsp;&nbsp;+ 25 &times; landslide_hazard<br>
+&nbsp;&nbsp;&nbsp;+ 25 &times; rainfall_hazard<br>
+&nbsp;&nbsp;&nbsp;+ 20 &times; lake_type_or_terrain_steepness<br>
+&nbsp;&nbsp;&nbsp;+ 10 &times; seasonal_factor
+</div>
+
+<p>Those weights are not derived from a statistical model fitted to historical GLOF outcomes. There is not nearly enough labeled event data in Nepal to fit something like that responsibly. They reflect a judgment call about which signals matter most for a sudden glacial lake outburst flood: a detected landslide or a burst of heavy rain is a much stronger sign that something is happening right now than a lake simply belonging to a steep, wet basin in July. We are upfront that this weighting could be wrong, and if we ever get access to a larger, well labeled historical dataset, we would rather recalibrate it than defend a number we chose somewhat by feel.</p>
+
+<p>The score maps onto four bands, each with a different real world response attached to it:</p>
+
+<table>
+<tr><th>Score</th><th>Label</th><th>What it is meant to trigger</th></tr>
+<tr><td>0 to 24</td><td>Normal</td><td>Routine monitoring, no special action</td></tr>
+<tr><td>25 to 49</td><td>Watch</td><td>Enhanced monitoring, no evacuation implied</td></tr>
+<tr><td>50 to 74</td><td>Danger</td><td>Public alert territory</td></tr>
+<tr><td>75 to 100</td><td>Extreme</td><td>Emergency broadcast territory</td></tr>
+</table>
+
+<p>Three situations override that simple math and force a lake to at least Watch, even if its raw weighted score lands lower: a real detected landslide within 30 kilometers, in the same river basin, in the last 7 days; a heavy rainfall reading; or, for a glacier watch point specifically, a steep slope combined with sustained wet conditions. We think of these as floors rather than bonuses. The idea is that one strong, direct piece of evidence should not get quietly averaged away by four other calm looking numbers sitting next to it.</p>
+
+<h2>Where each number actually comes from</h2>
+
+<h3>Earthquake hazard, 20 percent of the score</h3>
+<p>We query the USGS earthquake catalog every 10 minutes across several regions covering Nepal, pulling everything magnitude 4.0 and above within a 220 kilometer radius (USGS, n.d.). For each lake, we look at every quake from the last 30 days and turn magnitude, distance, and depth into a single hazard value using an exponential decay curve, so a bigger, closer, shallower quake counts for more and the effect fades out smoothly rather than cutting off at some arbitrary line. We deliberately did not put a hard floor on earthquakes the way we did with landslides. Shaking is a genuinely regional phenomenon, felt over a wide area rather than confined to one valley, so letting it decay naturally seemed more honest than drawing an artificial boundary around it.</p>
+<p>The 30 day window also decays with the quake's own age now, not just distance and depth. That change came out of actually reading the aftershock literature rather than assuming a flat window was fine. Aftershock frequency follows what seismologists call the Omori law, roughly a 1 over time decay, and how long that decay runs depends on the size of the mainshock. A magnitude 5 quake's aftershocks mostly die out within days to weeks, but a magnitude 7 event, the scale of the real 2015 Gorkha earthquake, can keep producing meaningful aftershock activity for months. The Gorkha earthquake's own aftermath makes the point concretely: Kargel et al. (2015) mapped over 4,000 quake-triggered landslides across the region and found the fractured slopes left behind kept producing rockfalls and avalanches well beyond the earthquake itself, and separate reporting traced a real GLOF in the Bhotekoshi and Sunkoshi valleys in July 2016, over a year later, back to sediment loosened by that same earthquake. A flat 30 day cutoff could not tell the difference between a quake from yesterday and one from 29 days ago, and then dropped it to zero entirely at day 30. Now the hazard value from a single quake fades exponentially with a 12 day half-decay constant: a quake is down to about 37 percent of its fresh value after 12 days, and about 8 percent after 30, rather than sitting at full strength the whole time and then vanishing. Twelve days is a deliberate middle ground we chose by hand, not a literal fit to any specific magnitude's aftershock curve, and we would rather say that plainly than present it as more precise than it is.</p>
+
+<h3>Landslide hazard, 25 percent of the score</h3>
+<p>USGS's own seismic network classifies some detections as landslide type events rather than ordinary tectonic earthquakes, and we treat that classification as a meaningfully stronger signal, since it is a direct sighting of actual mass movement rather than shaking that might or might not destabilize something later (USGS, n.d.). This is the one component we scoped tightly on purpose: a landslide only counts if it happened in the last 7 days, within 30 kilometers, and in the same river basin as the lake. Outside that window it contributes exactly zero, not a small leftover fraction of a point.</p>
+<p>That tight scoping came out of a real mistake we caught. Earlier, landslide hazard decayed smoothly over 30 days and 100 kilometers, the same way earthquake hazard does. In practice that meant a single real landslide could quietly push dozens of lakes across a huge stretch of the country into Watch for weeks, with no connection to whether those specific lakes were actually near it. Once we checked the numbers against the real database, roughly a third of everything on the dashboard was sitting under Watch purely because of that one event. We fixed it by requiring both proximity and a shared river basin, matched against a small curated list of towns per basin rather than real hydrological boundary data, since we do not have watershed polygons for these rivers. It is a reasonable stand in, not a survey grade measurement, and we want to be clear about that distinction rather than let it pass as more precise than it is.</p>
+
+<h3>Rainfall hazard, 25 percent of the score</h3>
+<p>Live weather comes from OpenWeatherMap, refreshed every 30 minutes for every monitored point (OpenWeather Ltd., n.d.). We track three windows at once: the last 24 hours, the last 7 days, and the last 14 days. A single unusually wet day can push the score up on its own, but so can two straight weeks of steady, moderate rain even if no single day looked dramatic, because sustained ground saturation is a real slope stability hazard in its own right, independent of any one day's total. We also dampen the rainfall signal when the temperature is below freezing, since precipitation at that point falls as snow rather than the kind of rain that drives glacial melt and runoff.</p>
+
+<h3>Lake type or terrain steepness, 20 percent of the score</h3>
+<p>For an actual lake, this weight comes directly from ICIMOD's own risk classification, Very High, High, Medium, or Low, which already accounts for things like the lake's damming mechanism and documented history that we are not attempting to recompute ourselves (ICIMOD, n.d.). For a glacier watch point that has no lake yet, we substitute the real terrain slope pulled from the Randolph Glacier Inventory instead (RGI Consortium, 2023). The reasoning is that a steep, unstable glacier terminus sitting close to a river can collapse and dam that river directly, without ever forming a lake first, which is exactly what happened near Langtang Lirung in August 2026.</p>
+
+<h3>Seasonal factor, 10 percent of the score</h3>
+<p>Nepal's monsoon runs roughly June through September, and documented glacial lake failures cluster heavily inside that window. We modeled the seasonal effect as a smooth curve that peaks around the end of July and tapers down to zero by late October and again by early May, rather than a blunt switch that treats every monsoon day identically and every other day as irrelevant. It is a real, well documented seasonal pattern, but it is still a calendar based approximation applied the same way to every lake in the country, not a location specific climate model.</p>
+
+<h3>Adjusting for size</h3>
+<p>A larger lake or glacier shaking under the same earthquake, or sitting under the same landslide, involves a lot more mass in motion than a small one does, so we scale both the earthquake and landslide components by the point's real surface area or glacier area. That scaling ranges from 0.5 for anything very small or of unknown size up to a full 1.0 once the area reaches 10 square kilometers or more.</p>
+
+<h2>How we actually gather the data</h2>
+<p>Part of this pipeline runs continuously and part of it is a one time import, and the distinction matters for how much you should trust the freshness of any given number.</p>
+<ul>
+<li><strong>Refreshed continuously.</strong> USGS earthquake and landslide detections update every 10 minutes. OpenWeatherMap readings update every 30 minutes for every monitored point. The full risk score for all 220 sites gets recalculated every 30 minutes as that new data comes in.</li>
+<li><strong>Imported once, static until we manually update it.</strong> ICIMOD's glacial lake inventory, filtered down to 97 lakes within Nepal, and the Randolph Glacier Inventory version 7, filtered to 123 glacier watch points with a slope over 30 degrees sitting within 10 kilometers of a known river town. Neither of these updates on its own. If ICIMOD or the RGI Consortium publish a revised dataset, we would need to re-run the import by hand.</li>
+</ul>
+
+<h2>What this cannot do yet</h2>
+<p>We would rather list these plainly here than have someone discover them the hard way while relying on the app.</p>
+<ul>
+<li>Our own weather history only goes back to early September 2026. Any question about rainfall before that date has no real data behind it, and any test we run involving an older event has to say so honestly rather than quietly assume typical conditions.</li>
+<li>There is no satellite based lake extent or glacier deformation monitoring in this version. Everything here comes from ground sensors, seismic networks, and static inventory records. Watching a lake visibly grow over time from satellite imagery is a reasonable direction to add later, not something this version attempts.</li>
+<li>The seasonal curve and the basin matching used for the landslide floor are both real, defensible approximations, not survey grade measurements. We would rather say that plainly than let the numbers imply more precision than they have.</li>
+<li>A lake can sit at Watch purely because of its static ICIMOD classification and the time of year, with nothing new actually happening. We now separate that kind of steady, predictable seasonal signal from an actual detected trigger, like fresh heavy rain or a nearby landslide, so the dashboard's main alert banner reflects genuinely new information rather than restating a fact you could look up once in the ICIMOD database and never need to check again.</li>
+</ul>
+
+<h2>Testing the formula against a real event</h2>
+<p>Rather than just trust the arithmetic, we ran it against something that actually happened: the ice and rock collapse near Langtang Lirung on August 26, 2026, which dammed the Lhende Khola and sent a flash flood across the border at Rasuwagadhi within about three minutes, reaching the town of Timure roughly thirteen minutes after the initial collapse (Wikipedia contributors, 2026). Using the real USGS detection of that event, magnitude 5.2, correctly logged as a landslide type rather than an ordinary earthquake, against a real nearby glacier watch point, the formula produced a score of 28.7, landing in Watch, with the landslide detection itself forcing that floor regardless of what the raw weighted number would have been on its own.</p>
+<p>Ten minutes before the collapse, with no landslide signal yet in the data, that same location scored 20.4, below the Watch threshold. We think that is an honest result rather than a disappointing one. This system reacts to what gets detected. It does not forecast a collapse before it happens, and we would rather show you the number that proves that limitation than quietly smooth it over.</p>
+
+<h2>References</h2>
+<ol class="refs">
+<li>ICIMOD. (n.d.). <em>HKH glacial lake outburst flood database</em>. International Centre for Integrated Mountain Development. Retrieved September 6, 2026, from https://www.icimod.org/</li>
+<li>Kargel, J. S., Leonard, G. J., Shugar, D. H., Haritashya, U. K., and coauthors. (2015). Geomorphic and geologic controls of geohazards induced by Nepal's 2015 Gorkha earthquake. <em>Science, 351</em>(6269). https://doi.org/10.1126/science.aac8353</li>
+<li>OpenWeather Ltd. (n.d.). <em>OpenWeatherMap</em>. Retrieved September 6, 2026, from https://openweathermap.org/</li>
+<li>RGI Consortium. (2023). <em>Randolph Glacier Inventory: A dataset of global glacier outlines, version 7.0</em>. National Snow and Ice Data Center. https://www.glims.org/</li>
+<li>U.S. Geological Survey. (n.d.). <em>Earthquake hazards program</em>. U.S. Department of the Interior. Retrieved September 6, 2026, from https://earthquake.usgs.gov/</li>
+<li>Wikipedia contributors. (2026). <em>Timeline of the 2026 Nepal-Tibet floods</em>. Wikipedia. https://en.wikipedia.org/wiki/Timeline_of_the_2026_Nepal_floods</li>
+</ol>
+
+<footer>
+    This is an independent monitoring project, not an official government or ICIMOD product. If you find something here that is wrong or out of date, telling us is more useful than a compliment would be.
+</footer>
+
+</div>
+</body>
+</html>
