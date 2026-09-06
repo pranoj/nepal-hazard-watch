@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { Mountain } from 'lucide-react';
 import { GlofRiskAssessment } from '../api/useGlofRiskMap';
 import { glassCardPad, mutedText, ALERT_LEVEL_LABEL } from '../utils/theme';
 
@@ -17,21 +18,21 @@ interface FeaturedLake {
 const FEATURED_LAKES: FeaturedLake[] = [
     {
         name: 'Tsho Rolpa',
-        caption: 'Nepal\'s largest, most closely monitored glacial lake — fitted with an artificial drainage channel since 2000',
+        caption: 'Nepal\'s largest, most closely monitored glacial lake, fitted with an artificial drainage channel since 2000',
         photoUrl: 'https://upload.wikimedia.org/wikipedia/commons/b/b3/Tsho_rolpa_lake.jpg',
         wikipediaUrl: 'https://en.wikipedia.org/wiki/Tsho_Rolpa',
     },
     {
         name: 'Imja Tsho',
         matchName: 'Chokarma Tsho',
-        caption: 'Everest region — one of the Himalaya\'s most-studied glacial lakes',
+        caption: 'Everest region, one of the Himalaya\'s most-studied glacial lakes',
         photoUrl: 'https://upload.wikimedia.org/wikipedia/commons/8/87/Imja_Tsho%2C_Nepal.jpg',
         wikipediaUrl: 'https://en.wikipedia.org/wiki/Imja_Tsho',
     },
     {
         name: 'Dig Tsho',
         matchName: 'Dig Tsho',
-        caption: 'Real 1985 GLOF — destroyed a hydropower plant and 14 bridges, 5 deaths',
+        caption: 'Real 1985 GLOF: destroyed a hydropower plant and 14 bridges, 5 deaths',
         photoUrl:
             'https://upload.wikimedia.org/wikipedia/commons/b/b8/ISS066-E-86263_-_View_of_Nepal_-_Drolambao_Glacier_-_Drangnag_Ri_-_Rolwaling_Glacier_-_Chobuje_%28Tsoboje%29_-_Trakarding_Glacier_-_Tsho_Rolpa_Lake_-_Dragkar_Go_%28Takargo%29_-_Tengi_Ragi_Tau_-_Dig_Tsho_Lake_-_Chhule_Glacier_%28cropped%29.jpg',
         // No dedicated Wikipedia article exists for Dig Tsho - links to
@@ -69,7 +70,9 @@ export function GlacierLakesCard({ risks }: GlacierLakesCardProps) {
     return (
         <div style={{ ...glassCardPad, marginTop: '1.5rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.9rem' }}>
-                <span style={{ fontWeight: 700, fontSize: '1.05rem' }}>🏔️ Notable Glacial Lakes</span>
+                <span style={{ fontWeight: 700, fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <Mountain size={19} strokeWidth={2} /> Notable Glacial Lakes
+                </span>
                 <span style={{ ...mutedText, fontSize: '0.75rem' }}>click a lake for Wikipedia</span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1.25rem' }}>
@@ -94,7 +97,7 @@ export function GlacierLakesCard({ risks }: GlacierLakesCardProps) {
                             <div style={{ ...mutedText, fontSize: '0.75rem' }}>{lake.caption}</div>
                             {liveMatch ? (
                                 <div style={{ fontSize: '0.75rem', color: '#eab308', marginTop: '0.2rem' }}>
-                                    Live: {liveMatch.riskScore.toFixed(0)}/100 — {ALERT_LEVEL_LABEL[liveMatch.alertLevel]}
+                                    Live: {liveMatch.riskScore.toFixed(0)}/100 · {ALERT_LEVEL_LABEL[liveMatch.alertLevel]}
                                 </div>
                             ) : (
                                 <div style={{ ...mutedText, fontSize: '0.7rem', marginTop: '0.2rem' }}>

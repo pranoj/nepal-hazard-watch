@@ -1,6 +1,8 @@
 import L from 'leaflet';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { MapContainer, TileLayer, Popup, Marker } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
+import { Activity, TriangleAlert, ShieldAlert, CloudRain, Thermometer, Building2, Snowflake, Mountain, MapPin, Clock } from 'lucide-react';
 import { GlofRiskAssessment } from '../api/useGlofRiskMap';
 import { useDownstreamTowns } from '../api/useDownstreamTowns';
 import { useHazardEvents } from '../api/useHazardEvents';
@@ -15,9 +17,16 @@ interface MapProps {
 const SEISMIC_MARKER_WINDOW_HOURS = 24;
 
 function seismicDivIcon(sourceType: string | null): L.DivIcon {
-    const emoji = sourceType === 'landslide' ? '⛰️' : '🌍';
+    const isLandslide = sourceType === 'landslide';
+    const Icon = isLandslide ? TriangleAlert : Activity;
+    const color = isLandslide ? '#f97316' : '#e2e8f0';
+    const svg = renderToStaticMarkup(
+        <div style={{ filter: 'drop-shadow(0 0 3px rgba(0,0,0,0.75))' }}>
+            <Icon size={26} color={color} strokeWidth={2.25} />
+        </div>,
+    );
     return L.divIcon({
-        html: `<div style="font-size:26px;line-height:1;filter:drop-shadow(0 0 4px rgba(0,0,0,0.6))">${emoji}</div>`,
+        html: svg,
         className: '',
         iconSize: [30, 30],
         iconAnchor: [15, 15],
@@ -44,8 +53,8 @@ export function Map({ glofRisks }: MapProps) {
                         {level}
                     </span>
                 ))}
-                <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'rgba(244,246,248,0.7)' }}>
-                    · 🌍/⛰️ Seismic activity in the last 24h
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: 'rgba(244,246,248,0.7)' }}>
+                    · <Activity size={13} strokeWidth={2} />/<TriangleAlert size={13} strokeWidth={2} color="#f97316" /> Seismic activity in the last 24h
                 </span>
             </div>
             <MapContainer center={center} zoom={7} maxZoom={17} style={{ height: '500px', borderRadius: '8px' }}>
@@ -76,26 +85,39 @@ export function Map({ glofRisks }: MapProps) {
                             zIndexOffset={alertZIndexOffset(risk.alertLevel, risk.riskScore)}
                         >
                             <Popup>
-                                <strong>{isGlacier ? '🧊' : '🏔️'} {risk.lakeName}</strong> ({risk.icimodId})<br />
+                                <strong style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                    {isGlacier ? <Snowflake size={14} strokeWidth={2} /> : <Mountain size={14} strokeWidth={2} />}
+                                    {risk.lakeName}
+                                </strong> ({risk.icimodId})<br />
                                 {isGlacier && <em>Glacier watch point - no lake yet, steep terminus near a river</em>}<br />
                                 GLOF Risk: <strong>{risk.riskScore.toFixed(0)}/100 - {risk.alertLevel}</strong><br />
                                 {risk.landslideDetected && (
-                                    <span style={{ color: '#dc2626', fontWeight: 'bold' }}>
-                                        ⚠️ Landslide/mass-movement detected nearby<br />
-                                    </span>
+                                    <>
+                                        <span style={{ color: '#dc2626', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                            <TriangleAlert size={14} strokeWidth={2} /> Landslide/mass-movement detected nearby
+                                        </span><br />
+                                    </>
                                 )}
                                 {risk.landslidePreCondition && (
-                                    <span style={{ color: '#ea580c', fontWeight: 'bold' }}>
-                                        ⛰️ Steep terrain + heavy rain - elevated landslide pre-condition<br />
-                                    </span>
+                                    <>
+                                        <span style={{ color: '#ea580c', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                            <ShieldAlert size={14} strokeWidth={2} /> Steep terrain + heavy rain - elevated landslide pre-condition
+                                        </span><br />
+                                    </>
                                 )}
                                 {risk.rainfallCondition === 'HEAVY' && (
-                                    <span style={{ color: '#dc2626', fontWeight: 'bold' }}>
-                                        🌧️ Heavy rainfall condition<br />
-                                    </span>
+                                    <>
+                                        <span style={{ color: '#dc2626', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                            <CloudRain size={14} strokeWidth={2} /> Heavy rainfall condition
+                                        </span><br />
+                                    </>
                                 )}
                                 {risk.meltCondition && (
-                                    <span>🌡️ Active melt conditions<br /></span>
+                                    <>
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                            <Thermometer size={14} strokeWidth={2} /> Active melt conditions
+                                        </span><br />
+                                    </>
                                 )}
                                 Rainfall factor: {(risk.rainfallComponent * 100).toFixed(0)}% ({risk.rainfallCondition})<br />
                                 Earthquake factor: {(risk.earthquakeComponent * 100).toFixed(0)}%<br />
@@ -104,7 +126,9 @@ export function Map({ glofRisks }: MapProps) {
                                 Season factor: {(risk.seasonalComponent * 100).toFixed(0)}%<br />
                                 {downstreamTowns && downstreamTowns.length > 0 && (
                                     <>
-                                        🏘️ Downstream ({risk.riverBasin}): {downstreamTowns.map(t => t.townName).join(' → ')}<br />
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                            <Building2 size={14} strokeWidth={2} /> Downstream ({risk.riverBasin}): {downstreamTowns.map(t => t.townName).join(' → ')}
+                                        </span><br />
                                     </>
                                 )}
                                 <small>Assessed: {new Date(risk.assessedAt).toLocaleString()}</small>
@@ -121,13 +145,20 @@ export function Map({ glofRisks }: MapProps) {
                         zIndexOffset={5000}
                     >
                         <Popup>
-                            <strong>
-                                {event.sourceType === 'landslide' ? '⛰️ Landslide/mass-movement' : '🌍 Earthquake'}
-                                {' — M'}{event.magnitude}
+                            <strong style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                {event.sourceType === 'landslide'
+                                    ? <TriangleAlert size={14} strokeWidth={2} />
+                                    : <Activity size={14} strokeWidth={2} />}
+                                {event.sourceType === 'landslide' ? 'Landslide/mass-movement' : 'Earthquake'}
+                                {' · M'}{event.magnitude}
                             </strong><br />
                             {extractNearbyArea(event.description)}<br />
-                            📍 {event.latitude}°N, {event.longitude}°E<br />
-                            🕒 {formatNepalTime(event.eventTime)} ({formatTimeAgo(minutesAgo(event.eventTime))})
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                <MapPin size={13} strokeWidth={2} /> {event.latitude}°N, {event.longitude}°E
+                            </span><br />
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                <Clock size={13} strokeWidth={2} /> {formatNepalTime(event.eventTime)} ({formatTimeAgo(minutesAgo(event.eventTime))})
+                            </span>
                         </Popup>
                     </Marker>
                 ))}

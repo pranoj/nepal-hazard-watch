@@ -1,18 +1,20 @@
 import { useEffect, useState } from 'react';
+import type { LucideIcon } from 'lucide-react';
+import { Sun, Cloud, CloudRain, CloudDrizzle, CloudLightning, CloudSnow, CloudFog, CloudSun, MapPin } from 'lucide-react';
 import { useWeatherForLocation } from '../api/useWeatherForLocation';
 import { GlofRiskAssessment } from '../api/useGlofRiskMap';
 import { glassCardPad, mutedText } from '../utils/theme';
 
-const WEATHER_CONDITION_ICON: Record<string, string> = {
-    Clear: '☀️',
-    Clouds: '☁️',
-    Rain: '🌧️',
-    Drizzle: '🌦️',
-    Thunderstorm: '⛈️',
-    Snow: '❄️',
-    Mist: '🌫️',
-    Fog: '🌫️',
-    Haze: '🌫️',
+const WEATHER_CONDITION_ICON: Record<string, { Icon: LucideIcon; color: string }> = {
+    Clear: { Icon: Sun, color: '#fbbf24' },
+    Clouds: { Icon: Cloud, color: '#cbd5e1' },
+    Rain: { Icon: CloudRain, color: '#60a5fa' },
+    Drizzle: { Icon: CloudDrizzle, color: '#60a5fa' },
+    Thunderstorm: { Icon: CloudLightning, color: '#a78bfa' },
+    Snow: { Icon: CloudSnow, color: '#e2e8f0' },
+    Mist: { Icon: CloudFog, color: '#cbd5e1' },
+    Fog: { Icon: CloudFog, color: '#cbd5e1' },
+    Haze: { Icon: CloudFog, color: '#cbd5e1' },
 };
 
 function formatNepalNow(date: Date): { time: string; day: string } {
@@ -43,7 +45,9 @@ export function ClockWeatherCard({ worst }: ClockWeatherCardProps) {
     }, []);
 
     const { time, day } = formatNepalNow(now);
-    const icon = weather ? WEATHER_CONDITION_ICON[weather.weatherCondition] ?? '🌤️' : '🌤️';
+    const { Icon: WeatherIcon, color: weatherColor } = weather
+        ? WEATHER_CONDITION_ICON[weather.weatherCondition] ?? { Icon: CloudSun, color: '#cbd5e1' }
+        : { Icon: CloudSun, color: '#cbd5e1' };
 
     return (
         <div style={glassCardPad}>
@@ -55,7 +59,7 @@ export function ClockWeatherCard({ worst }: ClockWeatherCardProps) {
             <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.15)', margin: '0.6rem 0' }} />
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <span style={{ fontSize: '1.8rem' }}>{icon}</span>
+                <WeatherIcon size={32} strokeWidth={1.75} color={weatherColor} style={{ flexShrink: 0 }} />
                 <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: '1.4rem', fontWeight: 700 }}>
                         {weather ? `${Math.round(weather.temperature)}°C` : '—'}
@@ -65,8 +69,9 @@ export function ClockWeatherCard({ worst }: ClockWeatherCardProps) {
                     </div>
                 </div>
             </div>
-            <div style={{ ...mutedText, marginTop: '0.4rem', fontSize: '0.75rem', lineHeight: 1.4 }}>
-                📍 {locationLabel} — highest current risk
+            <div style={{ ...mutedText, marginTop: '0.4rem', fontSize: '0.75rem', lineHeight: 1.4, display: 'flex', gap: '0.3rem' }}>
+                <MapPin size={13} strokeWidth={2} style={{ flexShrink: 0, marginTop: '0.1rem' }} />
+                <span>{locationLabel} · highest current risk</span>
             </div>
         </div>
     );

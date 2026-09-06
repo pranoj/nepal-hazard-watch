@@ -1,3 +1,4 @@
+import { CloudRain } from 'lucide-react';
 import { useWeatherHistory } from '../api/useWeatherHistory';
 import { GlofRiskAssessment } from '../api/useGlofRiskMap';
 import { glassCardPad, mutedText } from '../utils/theme';
@@ -26,7 +27,7 @@ export function RainfallTrendCard({ worst }: RainfallTrendCardProps) {
     return (
         <div style={glassCardPad}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
-                <span>🌧️</span>
+                <CloudRain size={18} strokeWidth={2} color="#60a5fa" />
                 <span>Rainfall Trend</span>
             </div>
             <div style={{ fontSize: '2rem', fontWeight: 700 }}>{latestTotal.toFixed(1)} mm</div>

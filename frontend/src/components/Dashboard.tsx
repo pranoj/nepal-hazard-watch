@@ -1,3 +1,4 @@
+import { Mountain, Map as MapIcon } from 'lucide-react';
 import { Map } from './Map';
 import { AlertStatus } from './AlertStatus';
 import { ClockWeatherCard } from './ClockWeatherCard';
@@ -29,7 +30,9 @@ export function Dashboard() {
             <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '2rem 1.5rem 3rem' }}>
                 <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
                     <div>
-                        <h1 style={{ margin: 0, fontSize: '1.6rem' }}>🏔️ Nepal Hazard Watch</h1>
+                        <h1 style={{ margin: 0, fontSize: '1.6rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <Mountain size={26} strokeWidth={2} /> Nepal Hazard Watch
+                        </h1>
                         <div style={{ ...mutedText, fontSize: '0.75rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
                             Safer people · Stronger Nepal
                         </div>
@@ -47,7 +50,9 @@ export function Dashboard() {
 
                     <div style={{ ...glassCardPad, gridColumn: '1 / 2', gridRow: '2' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
-                            <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>🗺️ Live Hazard Map</div>
+                            <div style={{ fontWeight: 700, fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                <MapIcon size={19} strokeWidth={2} /> Live Hazard Map
+                            </div>
                             <RiskGaugeCard risks={risks} />
                         </div>
                         <div style={{ marginTop: '0.75rem' }}>

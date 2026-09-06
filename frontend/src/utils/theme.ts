@@ -35,7 +35,7 @@ export const pill: CSSProperties = {
 // Ama Dablam, Nepal - Wikimedia Commons, CC-licensed.
 export const BACKGROUND_IMAGE_URL =
     'https://upload.wikimedia.org/wikipedia/commons/c/cc/Ama_Dablam_under_a_Painted_Sky.jpg';
-export const BACKGROUND_IMAGE_ATTRIBUTION = 'Ama Dablam, Nepal — Wikimedia Commons (CC)';
+export const BACKGROUND_IMAGE_ATTRIBUTION = 'Ama Dablam, Nepal · Wikimedia Commons (CC)';
 
 export const ALERT_LEVEL_LABEL: Record<'NORMAL' | 'WATCH' | 'DANGER' | 'EXTREME', string> = {
     NORMAL: 'Low',
