@@ -27,11 +27,6 @@ public class GlofController {
         this.riverBasinTownRepository = riverBasinTownRepository;
     }
 
-    @GetMapping("/test")
-    public String test() {
-        return "GLOF Controller is working!";
-    }
-
     @GetMapping("/risk-map")
     public ResponseEntity<List<GlofRiskAssessment>> getRiskMap() {
         return ResponseEntity.ok(glofRiskAssessmentRepository.findAllOrderByRiskScoreDesc());

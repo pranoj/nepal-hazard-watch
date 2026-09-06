@@ -168,15 +168,7 @@ public class WeatherService {
         return weatherRepository.findLatestByLocation(location).orElse(null);
     }
 
-    public List<Weather> getLatestWeatherForAllLocations() {
-        return weatherRepository.findLatestForAllLocations();
-    }
-
     public List<Weather> getRainfallHistory(String location, LocalDateTime startTime, LocalDateTime endTime) {
         return weatherRepository.findWeatherHistory(location, startTime, endTime);
-    }
-
-    public List<Weather> getHighRainfallEvents(double minRainfall, LocalDateTime startTime, LocalDateTime endTime) {
-        return weatherRepository.findHighRainfallEvents(minRainfall, startTime, endTime);
     }
 }

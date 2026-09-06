@@ -8,10 +8,6 @@ import org.springframework.data.repository.query.Param;
 import watch.nepalhazard.entity.HazardEvent;
 
 public interface HazardEventRepository extends JpaRepository<HazardEvent, Long> {
-    HazardEvent findByStatus(String status);
-
-    HazardEvent findTopByEventTypeOrderByEventTimeDesc(String eventType);
-
     @Query(value = "SELECT * FROM hazard_events WHERE event_type = 'EARTHQUAKE' ORDER BY event_time DESC LIMIT 2", nativeQuery = true)
     List<HazardEvent> findLatestTwoEarthquakes();
 

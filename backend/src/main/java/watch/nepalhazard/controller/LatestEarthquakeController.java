@@ -6,7 +6,6 @@ import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import watch.nepalhazard.dto.LatestEarthquakeResponse;
 import watch.nepalhazard.dto.EarthquakeAlertStatusResponse;
 import watch.nepalhazard.entity.HazardEvent;
 import watch.nepalhazard.repository.HazardEventRepository;
@@ -21,17 +20,6 @@ public class LatestEarthquakeController {
     @Autowired
     public LatestEarthquakeController(HazardEventRepository hazardEventRepository) {
         this.hazardEventRepository = hazardEventRepository;
-    }
-
-    @GetMapping
-    public LatestEarthquakeResponse getLatestEarthquake() {
-        HazardEvent latest = hazardEventRepository.findTopByEventTypeOrderByEventTimeDesc("EARTHQUAKE");
-
-        if (latest == null) {
-            return LatestEarthquakeResponse.noEarthquakes();
-        }
-
-        return LatestEarthquakeResponse.withNewEarthquakes(latest);
     }
 
     @GetMapping("/alert-status")
