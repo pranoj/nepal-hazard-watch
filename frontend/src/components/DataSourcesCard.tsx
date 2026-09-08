@@ -33,8 +33,8 @@ const DATA_SOURCES: DataSource[] = [
         url: 'https://www.glims.org/',
     },
     {
-        Icon: Satellite, name: 'Esri', org: 'Esri, Maxar, Earthstar Geographics',
-        usage: 'Satellite map imagery & place labels',
+        Icon: Satellite, name: 'Esri', org: 'Esri',
+        usage: 'Map place labels & administrative boundaries overlay',
         url: 'https://www.esri.com/',
     },
 ];

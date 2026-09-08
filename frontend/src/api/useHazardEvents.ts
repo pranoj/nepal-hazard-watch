@@ -26,7 +26,6 @@ export function useHazardEvents() {
                     setEvents(response.data);
                 }
             } catch {
-                // Leave events empty if unavailable.
             }
         };
 

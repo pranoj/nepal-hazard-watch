@@ -3,11 +3,17 @@ import { useAlertStatus, EarthquakeInfo } from '../api/useAlertStatus';
 import { extractNearbyArea, formatNepalTime, formatTimeAgo, minutesAgo } from '../utils/time';
 import { glassCardPad, mutedText } from '../utils/theme';
 
-function SeismicEventRow({ event }: { event: EarthquakeInfo }) {
+function SeismicEventRow({ event, onSelectEvent }: { event: EarthquakeInfo; onSelectEvent?: (event: EarthquakeInfo) => void }) {
     const isLandslide = event.sourceType === 'landslide';
     return (
         <div style={{ marginBottom: '0.6rem' }}>
-            <p style={{ marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
+            <p
+                style={{
+                    marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600,
+                    ...(onSelectEvent ? { cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: '2px' } : {}),
+                }}
+                onClick={onSelectEvent ? () => onSelectEvent(event) : undefined}
+            >
                 {isLandslide
                     ? <TriangleAlert size={21} strokeWidth={2.1} color="#f97316" style={{ flexShrink: 0 }} />
                     : <Activity size={21} strokeWidth={2.1} color="#60a5fa" style={{ flexShrink: 0 }} />}
@@ -24,7 +30,11 @@ function SeismicEventRow({ event }: { event: EarthquakeInfo }) {
     );
 }
 
-export function SeismicActivityCard() {
+interface SeismicActivityCardProps {
+    onSelectEvent?: (event: EarthquakeInfo) => void;
+}
+
+export function SeismicActivityCard({ onSelectEvent }: SeismicActivityCardProps) {
     const { alertStatus, loading } = useAlertStatus();
 
     return (
@@ -37,8 +47,8 @@ export function SeismicActivityCard() {
             {!loading && !alertStatus?.newAlert && <div style={mutedText}>No recent events recorded.</div>}
             {alertStatus?.newAlert && (
                 <>
-                    <SeismicEventRow event={alertStatus.newAlert} />
-                    {alertStatus.lastEarthquake && <SeismicEventRow event={alertStatus.lastEarthquake} />}
+                    <SeismicEventRow event={alertStatus.newAlert} onSelectEvent={onSelectEvent} />
+                    {alertStatus.lastEarthquake && <SeismicEventRow event={alertStatus.lastEarthquake} onSelectEvent={onSelectEvent} />}
                 </>
             )}
         </div>

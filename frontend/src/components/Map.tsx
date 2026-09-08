@@ -1,17 +1,66 @@
+import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MapContainer, TileLayer, Popup, Marker } from 'react-leaflet';
+import { MapContainer, TileLayer, Popup, Marker, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Activity, TriangleAlert, ShieldAlert, CloudRain, Thermometer, Building2, Snowflake, Mountain, MapPin, Clock } from 'lucide-react';
+import { Activity, TriangleAlert, MapPin, Clock } from 'lucide-react';
 import { GlofRiskAssessment } from '../api/useGlofRiskMap';
 import { useDownstreamTowns } from '../api/useDownstreamTowns';
 import { useHazardEvents } from '../api/useHazardEvents';
 import { alertDivIcon, alertZIndexOffset } from '../utils/alertVisuals';
 import { AlertShapeIcon } from './AlertShapeIcon';
+import { RiskDetailContent } from './RiskDetailContent';
 import { extractNearbyArea, formatNepalTime, formatTimeAgo, hoursAgo, minutesAgo } from '../utils/time';
+
+// `token` changes on every click, even re-clicking the same site, so the
+// focus effect always re-fires instead of only reacting to riskId changes.
+// Exactly one of riskId/seismic is set - a lake/glacier focus looks up its
+// coordinates from glofRisks, a seismic focus already carries its own
+// coordinates (it isn't in glofRisks at all).
+export interface MapFocusTarget {
+    token: number;
+    riskId?: number;
+    seismic?: { id: number; latitude: number; longitude: number };
+}
 
 interface MapProps {
     glofRisks: GlofRiskAssessment[];
+    focusTarget?: MapFocusTarget | null;
+}
+
+// Lives inside MapContainer (useMap only works below it) - pans to the
+// requested site and opens its real marker popup, the same one clicking it
+// directly on the map would open. Handles both a lake/glacier focus
+// (looked up from glofRisks) and a seismic event focus (coordinates already
+// known, since seismic events aren't part of glofRisks at all).
+function FocusHandler({ focusTarget, glofRisks, markerRefs, seismicMarkerRefs }: {
+    focusTarget: MapFocusTarget | null | undefined;
+    glofRisks: GlofRiskAssessment[];
+    markerRefs: React.MutableRefObject<globalThis.Map<number, L.Marker>>;
+    seismicMarkerRefs: React.MutableRefObject<globalThis.Map<number, L.Marker>>;
+}) {
+    const map = useMap();
+
+    useEffect(() => {
+        if (!focusTarget) return;
+
+        if (focusTarget.seismic) {
+            const { id, latitude, longitude } = focusTarget.seismic;
+            map.flyTo([latitude, longitude], Math.max(map.getZoom(), 12), { duration: 0.8 });
+            seismicMarkerRefs.current.get(id)?.openPopup();
+            return;
+        }
+
+        const risk = glofRisks.find(r => r.id === focusTarget.riskId);
+        if (!risk) return;
+
+        map.flyTo([risk.latitude, risk.longitude], Math.max(map.getZoom(), 12), { duration: 0.8 });
+        const marker = markerRefs.current.get(focusTarget.riskId!);
+        marker?.openPopup();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [focusTarget]);
+
+    return null;
 }
 
 const SEISMIC_MARKER_WINDOW_HOURS = 24;
@@ -19,25 +68,44 @@ const SEISMIC_MARKER_WINDOW_HOURS = 24;
 function seismicDivIcon(sourceType: string | null): L.DivIcon {
     const isLandslide = sourceType === 'landslide';
     const Icon = isLandslide ? TriangleAlert : Activity;
-    const color = isLandslide ? '#f97316' : '#e2e8f0';
+    // Earthquake was near-invisible against the map at the old light gray
+    // (#e2e8f0) - red reads as an active hazard the way the landslide
+    // orange already does, and matches the "critical" red used elsewhere
+    // in the app (AlertStatus's EXTREME banner).
+    const color = isLandslide ? '#f97316' : '#dc2626';
+    const size = 34;
+    // Static "vibrating" look, not an actual animation: two blurred,
+    // offset copies of the icon sit behind a sharp one in front, the same
+    // trick a comic-panel motion blur uses, so it reads as tremor at a
+    // glance without anything actually moving.
     const svg = renderToStaticMarkup(
-        <div style={{ filter: 'drop-shadow(0 0 3px rgba(0,0,0,0.75))' }}>
-            <Icon size={26} color={color} strokeWidth={2.25} />
+        <div style={{ position: 'relative', width: size + 8, height: size + 8 }}>
+            <div style={{ position: 'absolute', top: -3, left: -3, opacity: 0.4, filter: 'blur(2px)' }}>
+                <Icon size={size} color={color} strokeWidth={2.25} />
+            </div>
+            <div style={{ position: 'absolute', top: 3, left: 3, opacity: 0.4, filter: 'blur(2px)' }}>
+                <Icon size={size} color={color} strokeWidth={2.25} />
+            </div>
+            <div style={{ position: 'absolute', top: 0, left: 0, filter: 'drop-shadow(0 0 3px rgba(0,0,0,0.85))' }}>
+                <Icon size={size} color={color} strokeWidth={2.25} />
+            </div>
         </div>,
     );
     return L.divIcon({
         html: svg,
         className: '',
-        iconSize: [30, 30],
-        iconAnchor: [15, 15],
-        popupAnchor: [0, -15],
+        iconSize: [size + 8, size + 8],
+        iconAnchor: [(size + 8) / 2, (size + 8) / 2],
+        popupAnchor: [0, -(size + 8) / 2],
     });
 }
 
-export function Map({ glofRisks }: MapProps) {
+export function Map({ glofRisks, focusTarget }: MapProps) {
     const center: [number, number] = [28.5, 85.5];
     const { townsByBasin } = useDownstreamTowns();
     const { events } = useHazardEvents();
+    const markerRefs = useRef<globalThis.Map<number, L.Marker>>(new globalThis.Map());
+    const seismicMarkerRefs = useRef<globalThis.Map<number, L.Marker>>(new globalThis.Map());
 
     const recentSeismicEvents = events.filter(
         (e) => e.eventType === 'EARTHQUAKE' && hoursAgo(e.eventTime) < SEISMIC_MARKER_WINDOW_HOURS,
@@ -71,67 +139,27 @@ export function Map({ glofRisks }: MapProps) {
                     zooming in reveals real place names over the imagery. */}
                 <TileLayer
                     url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+                    attribution="Labels &copy; <a href=&quot;https://www.esri.com/&quot;>Esri</a>"
                     maxZoom={17}
                 />
 
+                <FocusHandler focusTarget={focusTarget} glofRisks={glofRisks} markerRefs={markerRefs} seismicMarkerRefs={seismicMarkerRefs} />
+
                 {glofRisks.map((risk) => {
                     const downstreamTowns = risk.riverBasin ? townsByBasin.get(risk.riverBasin) : undefined;
-                    const isGlacier = risk.sourceType === 'GLACIER';
                     return (
                         <Marker
                             key={risk.id}
+                            ref={(el) => {
+                                if (el) markerRefs.current.set(risk.id, el);
+                                else markerRefs.current.delete(risk.id);
+                            }}
                             position={[risk.latitude, risk.longitude]}
                             icon={alertDivIcon(risk.alertLevel, risk.riskScore)}
                             zIndexOffset={alertZIndexOffset(risk.alertLevel, risk.riskScore)}
                         >
                             <Popup>
-                                <strong style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                    {isGlacier ? <Snowflake size={14} strokeWidth={2} /> : <Mountain size={14} strokeWidth={2} />}
-                                    {risk.lakeName}
-                                </strong> ({risk.icimodId})<br />
-                                {isGlacier && <em>Glacier watch point - no lake yet, steep terminus near a river</em>}<br />
-                                GLOF Risk: <strong>{risk.riskScore.toFixed(0)}/100 - {risk.alertLevel}</strong><br />
-                                {risk.landslideDetected && (
-                                    <>
-                                        <span style={{ color: '#dc2626', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                            <TriangleAlert size={14} strokeWidth={2} /> Landslide/mass-movement detected nearby
-                                        </span><br />
-                                    </>
-                                )}
-                                {risk.landslidePreCondition && (
-                                    <>
-                                        <span style={{ color: '#ea580c', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                            <ShieldAlert size={14} strokeWidth={2} /> Steep terrain + heavy rain - elevated landslide pre-condition
-                                        </span><br />
-                                    </>
-                                )}
-                                {risk.rainfallCondition === 'HEAVY' && (
-                                    <>
-                                        <span style={{ color: '#dc2626', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                            <CloudRain size={14} strokeWidth={2} /> Heavy rainfall condition
-                                        </span><br />
-                                    </>
-                                )}
-                                {risk.meltCondition && (
-                                    <>
-                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                            <Thermometer size={14} strokeWidth={2} /> Active melt conditions
-                                        </span><br />
-                                    </>
-                                )}
-                                Rainfall factor: {(risk.rainfallComponent * 100).toFixed(0)}% ({risk.rainfallCondition})<br />
-                                Earthquake factor: {(risk.earthquakeComponent * 100).toFixed(0)}%<br />
-                                Landslide factor: {(risk.landslideComponent * 100).toFixed(0)}%<br />
-                                {isGlacier ? 'Terrain steepness' : 'Lake type'} factor: {(risk.lakeTypeComponent * 100).toFixed(0)}%<br />
-                                Season factor: {(risk.seasonalComponent * 100).toFixed(0)}%<br />
-                                {downstreamTowns && downstreamTowns.length > 0 && (
-                                    <>
-                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                            <Building2 size={14} strokeWidth={2} /> Downstream ({risk.riverBasin}): {downstreamTowns.map(t => t.townName).join(' → ')}
-                                        </span><br />
-                                    </>
-                                )}
-                                <small>Assessed: {new Date(risk.assessedAt).toLocaleString()}</small>
+                                <RiskDetailContent risk={risk} downstreamTowns={downstreamTowns} />
                             </Popup>
                         </Marker>
                     );
@@ -140,6 +168,10 @@ export function Map({ glofRisks }: MapProps) {
                 {recentSeismicEvents.map((event) => (
                     <Marker
                         key={`seismic-${event.id}`}
+                        ref={(el) => {
+                            if (el) seismicMarkerRefs.current.set(event.id, el);
+                            else seismicMarkerRefs.current.delete(event.id);
+                        }}
                         position={[event.latitude, event.longitude]}
                         icon={seismicDivIcon(event.sourceType)}
                         zIndexOffset={5000}

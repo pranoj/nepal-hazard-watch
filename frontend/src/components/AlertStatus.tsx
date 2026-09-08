@@ -47,6 +47,33 @@ function groupByBasin(risks: GlofRiskAssessment[]): Array<[string, GlofRiskAsses
     return [...groups.entries()].sort((a, b) => b[1].length - a[1].length);
 }
 
+// Same click target style everywhere a lake/glacier name is shown as text
+// (not already inside a PointRow) - opens the same card clicking its point
+// on the map would show.
+function ClickableName({ risk, onSelect }: { risk: GlofRiskAssessment; onSelect: (risk: GlofRiskAssessment) => void }) {
+    return (
+        <span
+            onClick={() => onSelect(risk)}
+            style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: '2px' }}
+        >
+            {risk.lakeName}
+        </span>
+    );
+}
+
+function ClickableNameList({ risks, onSelect }: { risks: GlofRiskAssessment[]; onSelect: (risk: GlofRiskAssessment) => void }) {
+    return (
+        <>
+            {risks.map((r, i) => (
+                <span key={r.id}>
+                    {i > 0 && ', '}
+                    <ClickableName risk={r} onSelect={onSelect} />
+                </span>
+            ))}
+        </>
+    );
+}
+
 interface RiskFlag { Icon: LucideIcon; label: string }
 
 function riskFlags(risk: GlofRiskAssessment): RiskFlag[] {
@@ -58,7 +85,7 @@ function riskFlags(risk: GlofRiskAssessment): RiskFlag[] {
     return flags;
 }
 
-function PointRow({ risk }: { risk: GlofRiskAssessment }) {
+function PointRow({ risk, onSelect }: { risk: GlofRiskAssessment; onSelect: (risk: GlofRiskAssessment) => void }) {
     const isGlacier = risk.sourceType === 'GLACIER';
     const TypeIcon = isGlacier ? Snowflake : Mountain;
     const flags = riskFlags(risk);
@@ -72,7 +99,7 @@ function PointRow({ risk }: { risk: GlofRiskAssessment }) {
             }}>
                 <TypeIcon size={13} strokeWidth={2} style={{ flexShrink: 0, color: 'rgba(244,246,248,0.75)' }} />
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    <strong>{risk.lakeName}</strong>
+                    <strong><ClickableName risk={risk} onSelect={onSelect} /></strong>
                     <span style={mutedText}> · {dominantFactor(risk)}</span>
                 </span>
                 {flags.map(({ Icon, label }, i) => (
@@ -91,8 +118,9 @@ function PointRow({ risk }: { risk: GlofRiskAssessment }) {
     );
 }
 
-function BasinGroup({ basin, points, townsByBasin }: {
+function BasinGroup({ basin, points, townsByBasin, onSelect }: {
     basin: string; points: GlofRiskAssessment[]; townsByBasin: Map<string, RiverBasinTown[]>;
+    onSelect: (risk: GlofRiskAssessment) => void;
 }) {
     const downstreamTowns = townsByBasin.get(basin);
     const shown = points.slice(0, MAX_POINTS_PER_BASIN);
@@ -116,7 +144,7 @@ function BasinGroup({ basin, points, townsByBasin }: {
                     </div>
                 )}
             </div>
-            {shown.map(risk => <PointRow key={risk.id} risk={risk} />)}
+            {shown.map(risk => <PointRow key={risk.id} risk={risk} onSelect={onSelect} />)}
             {hidden > 0 && (
                 <p style={{ ...mutedText, fontSize: '0.75rem', margin: '0.2rem 0 0' }}>
                     + {hidden} more · see map
@@ -126,7 +154,11 @@ function BasinGroup({ basin, points, townsByBasin }: {
     );
 }
 
-export function AlertStatus() {
+interface AlertStatusProps {
+    onSelectRisk: (risk: GlofRiskAssessment) => void;
+}
+
+export function AlertStatus({ onSelectRisk }: AlertStatusProps) {
     const { risks, loading: risksLoading, error: risksError } = useGlofRiskMap();
     const { townsByBasin } = useDownstreamTowns();
 
@@ -167,22 +199,39 @@ export function AlertStatus() {
 
             {shown.length > 0 &&
                 groupByBasin(shown).map(([basin, points]) => (
-                    <BasinGroup key={basin} basin={basin} points={points} townsByBasin={townsByBasin} />
+                    <BasinGroup key={basin} basin={basin} points={points} townsByBasin={townsByBasin} onSelect={onSelectRisk} />
                 ))}
 
-            {watchBaseline.length > 0 && (
-                <div style={{
-                    ...mutedText, fontSize: '0.72rem', marginTop: shown.length > 0 ? '0.4rem' : '0.5rem',
-                    display: 'flex', gap: '0.4rem',
-                }}>
-                    <Info size={13} strokeWidth={2} style={{ flexShrink: 0, marginTop: '0.15rem' }} />
-                    <span>
-                        {describeCounts(watchBaseline)} ({watchBaseline.map(r => r.lakeName).join(', ')}) sitting in a
-                        seasonal high-risk window right now (real ICIMOD classification + monsoon timing) but with no
-                        active trigger detected, so not counted above.
-                    </span>
-                </div>
-            )}
+            {watchBaseline.length > 0 && (() => {
+                const baselineLakes = watchBaseline.filter(r => r.sourceType !== 'GLACIER');
+                const baselineGlaciers = watchBaseline.filter(r => r.sourceType === 'GLACIER');
+                return (
+                    <div style={{
+                        ...mutedText, fontSize: '0.72rem', marginTop: shown.length > 0 ? '0.4rem' : '0.5rem',
+                        display: 'flex', gap: '0.4rem',
+                    }}>
+                        <Info size={13} strokeWidth={2} style={{ flexShrink: 0, marginTop: '0.15rem' }} />
+                        <span style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                            {baselineLakes.length > 0 && (
+                                <span>
+                                    {baselineLakes.length} Lake{baselineLakes.length > 1 ? 's' : ''} (
+                                    <ClickableNameList risks={baselineLakes} onSelect={onSelectRisk} />)
+                                </span>
+                            )}
+                            {baselineGlaciers.length > 0 && (
+                                <span>
+                                    {baselineGlaciers.length} Glacier{baselineGlaciers.length > 1 ? 's' : ''} (
+                                    <ClickableNameList risks={baselineGlaciers} onSelect={onSelectRisk} />)
+                                </span>
+                            )}
+                            <span>
+                                sitting in a seasonal high-risk window right now (real ICIMOD classification + monsoon
+                                timing) but with no active trigger detected, so not counted above.
+                            </span>
+                        </span>
+                    </div>
+                );
+            })()}
         </div>
     );
 }

@@ -23,6 +23,11 @@ export interface GlofRiskAssessment {
     rainfallCondition: 'NORMAL' | 'ELEVATED' | 'HEAVY';
     meltCondition: boolean;
     nearestEarthquakeId: number | null;
+    satelliteComponent: number | null;
+    satelliteWaterFraction: number | null;
+    satelliteLakeGrowthDetected: boolean;
+    satelliteIceFraction: number | null;
+    satelliteIceSuddenDropDetected: boolean;
     assessedAt: string;
 }
 
