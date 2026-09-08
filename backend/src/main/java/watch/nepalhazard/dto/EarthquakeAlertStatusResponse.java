@@ -47,14 +47,11 @@ public class EarthquakeAlertStatusResponse {
         // silently skew this by several hours otherwise.
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         long minutesPassed = java.time.temporal.ChronoUnit.MINUTES.between(latest.getEventTime(), now);
-
-        // Alert is active if earthquake happened in last 30 minutes
         boolean isActive = minutesPassed <= 30;
 
         response.setAlertActive(isActive);
         response.setMinutesSinceAlert(minutesPassed);
 
-        // Convert to DTO
         EarthquakeInfo newAlert = new EarthquakeInfo(
                 latest.getId(),
                 latest.getMagnitude(),
@@ -66,7 +63,6 @@ public class EarthquakeAlertStatusResponse {
                 latest.getSourceType());
         response.setNewAlert(newAlert);
 
-        // Add previous earthquake if it exists
         if (previous != null) {
             EarthquakeInfo lastAlert = new EarthquakeInfo(
                     previous.getId(),

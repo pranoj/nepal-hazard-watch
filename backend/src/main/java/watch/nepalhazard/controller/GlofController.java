@@ -13,7 +13,7 @@ import watch.nepalhazard.repository.GlofRiskAssessmentRepository;
 import watch.nepalhazard.repository.RiverBasinTownRepository;
 
 @RestController
-@CrossOrigin(origins = "http://localhost:5173")
+@CrossOrigin(origins = "${app.cors.allowed-origin:http://localhost:5173}")
 @RequestMapping("/glof")
 public class GlofController {
 

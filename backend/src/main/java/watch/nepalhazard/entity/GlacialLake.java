@@ -71,9 +71,6 @@ public class GlacialLake {
     @Column(name = "surface_area_km2")
     private Double surfaceAreaKm2;
 
-    /**
-     * Country where the glacial lake is located
-     */
     @Column(name = "country")
     private String country;
 

@@ -46,11 +46,18 @@ class HistoricalGLOFBacktestTest {
     @Mock
     private RiverBasinTownRepository riverBasinTownRepository;
 
+    @Mock
+    private watch.nepalhazard.repository.LakeSatelliteObservationRepository lakeSatelliteObservationRepository;
+
+    @Mock
+    private watch.nepalhazard.repository.GlacierSatelliteObservationRepository glacierSatelliteObservationRepository;
+
     private GLOFRiskCalculationService service;
 
     @BeforeEach
     void setUp() {
-        service = new GLOFRiskCalculationService(weatherRepository, hazardEventRepository, riverBasinTownRepository);
+        service = new GLOFRiskCalculationService(weatherRepository, hazardEventRepository, riverBasinTownRepository,
+                lakeSatelliteObservationRepository, glacierSatelliteObservationRepository, false, false);
     }
 
     /**
@@ -298,9 +305,82 @@ class HistoricalGLOFBacktestTest {
         assertThat(historicallyAccurateScore).isGreaterThanOrEqualTo(25.0);
     }
 
+    /**
+     * A single consistent reconstruction of the real Aug 26 timeline, for
+     * the methodology page's timeline table/chart - unlike the isolated
+     * component tests above (each of which deliberately zeroes out one real
+     * signal to test the other alone), every point here uses the same real
+     * NASA POWER rainfall reading throughout, with only the landslide
+     * detection state changing at its real, correct elapsed time. This is
+     * what the formula would have actually shown in sequence, not four
+     * separate isolated claims stitched together.
+     */
+    @Test
+    void aug26_consistentTimeline_sameRealRainfallThroughout_onlyLandslideStateChanges() {
+        Glacier langtangGlacier = Glacier.builder()
+                .id(1L).rgiId("RGI2000-v7.0-G-15-05840").glacierName("Glacier 1.6km from Kyanjin Gompa")
+                .terminusLatitude(28.21247770786395).terminusLongitude(85.69629548099003)
+                .slopeDeg(48.48048).areaKm2(0.045344545812138)
+                .build();
+
+        when(hazardEventRepository.findRecentEarthquakes(any())).thenReturn(Collections.emptyList());
+        when(hazardEventRepository.findRecentLandslides(any())).thenReturn(Collections.emptyList());
+
+        // Real NASA POWER rainfall, trailing 14 days as of Aug 19 (Aug 6-19)
+        // - one week before the collapse. No landslide signal yet, real
+        // rainfall only.
+        stubRealRainfall(langtangGlacier.getRgiId(), new double[] {
+                18.03, 27.24, 42.8, 12.77, 24.15, 8.78, 14.3,
+                13.63, 19.56, 29.71, 22.02, 16.38, 21.44, 31.35 }, 31.35);
+        printTimelinePoint(langtangGlacier, "Aug 19, 1 week before collapse", null, 8, 19, 2, 35, 0);
+
+        // Real NASA POWER rainfall, trailing 14 days as of Aug 25 (Aug 12-25)
+        // - one day before the collapse.
+        stubRealRainfall(langtangGlacier.getRgiId(), new double[] {
+                14.3, 13.63, 19.56, 29.71, 22.02, 16.38, 21.44,
+                31.35, 16.87, 27.37, 11.95, 5.05, 18.39, 33.33 }, 33.33);
+        printTimelinePoint(langtangGlacier, "Aug 25, 1 day before collapse", null, 8, 25, 2, 35, 0);
+
+        stubRealAug26Rainfall(langtangGlacier.getRgiId());
+        printTimelinePoint(langtangGlacier, "08:20 (17 min before collapse)", null, 8, 26, 2, 35, 0);
+        printTimelinePoint(langtangGlacier, "08:27 (10 min before collapse)", null, 8, 26, 2, 42, 10);
+        printTimelinePoint(langtangGlacier, "08:40 (3 min after detection)", 3L, 8, 26, 2, 55, 0);
+        printTimelinePoint(langtangGlacier, "08:45 (8 min after collapse)", 8L, 8, 26, 3, 0, 0);
+    }
+
+    private void printTimelinePoint(Glacier glacier, String label, Long landslideMinutesAgo,
+            int month, int day, int utcHour, int utcMinute, int utcSecond) {
+        when(hazardEventRepository.findRecentLandslides(any())).thenReturn(landslideMinutesAgo == null
+                ? Collections.emptyList()
+                : List.of(realLandslideEvent(6L, 5.2, 28.271, 85.515, landslideMinutesAgo),
+                        realLandslideEvent(5L, 4.2, 28.27, 85.515, landslideMinutesAgo)));
+
+        GlofRiskAssessment result = service.assessGlacier(glacier);
+        double realSeasonal = service.calculateSeasonalModifier(LocalDateTime.of(2026, month, day, utcHour, utcMinute, utcSecond));
+        double reconstructedScore = 25 * result.getLandslideComponent()
+                + 25 * result.getRainfallComponent()
+                + 20 * 0.5696096
+                + 10 * realSeasonal;
+
+        System.out.printf("%-32s -> score=%.1f alert=%-7s landslideDetected=%-5s preCondition=%-5s "
+                        + "(landslideComp=%.3f, rainfallComp=%.3f condition=%s, season=%.3f)%n",
+                label, reconstructedScore, service.getAlertLevel(reconstructedScore), landslideMinutesAgo != null,
+                result.getLandslidePreCondition(), result.getLandslideComponent(), result.getRainfallComponent(),
+                result.getRainfallCondition(), realSeasonal);
+    }
+
     private void stubRealAug26Rainfall(String locationKey) {
-        double[] fourteenDaysRealMm = {13.63, 19.56, 29.71, 22.02, 16.38, 21.44, 31.35,
-                16.87, 27.37, 11.95, 5.05, 18.39, 33.33, 19.28}; // Aug 13-26, real NASA POWER data
+        stubRealRainfall(locationKey, new double[] {13.63, 19.56, 29.71, 22.02, 16.38, 21.44, 31.35,
+                16.87, 27.37, 11.95, 5.05, 18.39, 33.33, 19.28}, 19.28); // Aug 13-26, real NASA POWER data
+    }
+
+    /**
+     * Stubs a real, trailing 14-day NASA POWER rainfall window ending on the
+     * "as of" day being tested - reusable for any point in the timeline, not
+     * just Aug 26 itself, so a week-before or day-before reconstruction uses
+     * its own correct real trailing window rather than Aug 26's.
+     */
+    private void stubRealRainfall(String locationKey, double[] fourteenDaysRealMm, double todayMm) {
         List<Weather> fourteenDayReadings = new java.util.ArrayList<>();
         for (double mm : fourteenDaysRealMm) {
             fourteenDayReadings.add(realWeatherReading(locationKey, 14.5, mm));
@@ -308,7 +388,7 @@ class HistoricalGLOFBacktestTest {
         List<Weather> sevenDayReadings = fourteenDayReadings.subList(7, 14);
 
         when(weatherRepository.findLatestByLocation(locationKey))
-                .thenReturn(Optional.of(realWeatherReading(locationKey, 14.49, 19.28))); // Aug 26 itself
+                .thenReturn(Optional.of(realWeatherReading(locationKey, 14.5, todayMm)));
 
         LocalDateTime elevenDaysAgo = LocalDateTime.now().minusDays(11);
         when(weatherRepository.findWeatherHistory(eq(locationKey),

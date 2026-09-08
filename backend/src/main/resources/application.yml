@@ -1,3 +1,10 @@
+app:
+  # Every controller's @CrossOrigin reads this. Defaults to the local dev
+  # frontend so nothing changes for local development; set APP_CORS_ORIGIN
+  # to the real deployed frontend URL before going live.
+  cors:
+    allowed-origin: ${APP_CORS_ORIGIN:http://localhost:5173}
+
 spring:
   application:
     name: nepal-hazard-watch
@@ -80,10 +87,26 @@ logging:
 
 earthquake:
   usgs:
-    api-url: https://earthquake.usgs.gov/fdsnws/event/1/query
-    fetch-interval-ms: 600000
+    # The pre-built GeoJSON summary feed, not the fdsnws query API - USGS's
+    # own docs recommend this for polling apps ("best performance and
+    # availability"), since it's a published file refreshed on a schedule
+    # rather than a live database query computed fresh per request. One
+    # request per poll (global, magnitude 2.5+) instead of three
+    # region-scoped query-API calls. "2.5" is the closest available bucket
+    # below our 4.0 floor (buckets are 1.0/2.5/4.5/significant) - filtering
+    # down to >=4.0 and to Nepal happens client-side in UsgsEarthquakeService,
+    # same as it always has for the Nepal bounding box. "_day" (not "_hour")
+    # gives a wider safety margin against any app downtime between polls;
+    # both are cached 60 seconds server-side either way, so there's no
+    # extra load from choosing the wider window.
+    api-url: https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson
+    # USGS caches its feed responses for 60 seconds server-side - polling
+    # faster than that returns identical cached data, not fresher data.
+    # 1 minute matches that window exactly. A new landslide/earthquake found
+    # on any poll triggers an immediate risk rescan (see UsgsEarthquakeService
+    # / GlofRiskScanService) rather than waiting for the 30-min scan cycle.
+    fetch-interval-ms: 60000
     min-magnitude: 4.0
-    max-radius-km: 220
     timeout-seconds: 30
     retry-attempts: 3
 
@@ -107,17 +130,6 @@ earthquake:
     moderate-magnitude: 5.0
     low-magnitude: 4.0
 
-  query-regions:
-    - name: eastern
-      latitude: 27.5
-      longitude: 87.5
-    - name: central
-      latitude: 28.25
-      longitude: 84.25
-    - name: western
-      latitude: 28.5
-      longitude: 81.0
-
 weather:
   api-url: ${WEATHER_API_URL:https://api.openweathermap.org/data/2.5}
   api-key: ${WEATHER_API_KEY:your-api-key-here}
@@ -126,3 +138,39 @@ weather:
 
 glof:
   risk-scan-interval-ms: 1800000
+
+terrain:
+  elevation:
+    api-url: ${ELEVATION_API_URL:https://api.open-elevation.com/api/v1/lookup}
+    timeout-seconds: 15
+
+# Satellite lake/glacier tracking. See SentinelHubClient,
+# SatelliteLakeTrackingService, SatelliteGlacierTrackingService. Real credentials belong only in
+# application-local.yml (gitignored), never here.
+satellite:
+  sentinel-hub:
+    client-id: ${SENTINEL_HUB_CLIENT_ID:}
+    client-secret: ${SENTINEL_HUB_CLIENT_SECRET:}
+    token-url: https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token
+    statistics-url: https://sh.dataspace.copernicus.eu/statistics/v1
+    timeout-seconds: 20
+  # 5 days, matching Sentinel-2's real revisit cadence over Nepal - the
+  # service itself also skips any lake with a fresher-than-4-day reading,
+  # so restarting the app doesn't re-burn quota on unchanged imagery.
+  tracking-interval-ms: 432000000
+  factor:
+    # Kill switch for the whole satellite contribution (both the weighted
+    # score term and the WATCH floor). Turned on 2026-09-07 as an MVP,
+    # calibrated against real Himalayan lake growth-rate data (see
+    # GLOFRiskCalculationService), not yet run through a full live season -
+    # intended to be reviewed after ~1 month of real observations.
+    enabled: true
+  # Separate kill switch for the glacier ice/snow-cover sudden-drop factor
+  # (SatelliteGlacierTrackingService, assessSatelliteIceDrop). Kept distinct
+  # from satellite.factor above because this one is NOT backed by a
+  # published calibration dataset the way the lake growth threshold is -
+  # first-pass, physically-reasoned defaults only. Turned on 2026-09-07 per
+  # explicit request, with today as each glacier's baseline reading (no
+  # historical backfill - a collapse is a sudden event, not a slow trend).
+  glacier-factor:
+    enabled: true

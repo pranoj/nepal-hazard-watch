@@ -3,8 +3,6 @@ package watch.nepalhazard.service;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import java.util.List;
-import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -26,18 +24,20 @@ public class UsgsEarthquakeService {
 
     private final HazardEventRepository hazardEventRepository;
     private final RegionRepository regionRepository;
+    private final GlofRiskScanService glofRiskScanService;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
     private Usgs usgs;
     private Nepal nepal;
     private GlacierZone glacierZone;
-    private List<Map<String, Object>> queryRegions;
 
     @Autowired
-    public UsgsEarthquakeService(HazardEventRepository hazardEventRepository, RegionRepository regionRepository) {
+    public UsgsEarthquakeService(HazardEventRepository hazardEventRepository, RegionRepository regionRepository,
+            GlofRiskScanService glofRiskScanService) {
         this.hazardEventRepository = hazardEventRepository;
         this.regionRepository = regionRepository;
+        this.glofRiskScanService = glofRiskScanService;
 
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(15000);
@@ -46,59 +46,60 @@ public class UsgsEarthquakeService {
         this.objectMapper = new ObjectMapper();
     }
 
+    /**
+     * One request per poll against USGS's pre-built global GeoJSON summary
+     * feed (magnitude 2.5+, past day), rather than three separate live
+     * queries against their fdsnws query API - USGS's own docs recommend
+     * the summary feed for exactly this kind of repeated automated polling.
+     * Magnitude (&gt;=4.0) and geography (Nepal's real bounding box, not an
+     * approximation via three overlapping search-radius circles) are both
+     * filtered client-side here, which is also more correct: a quake just
+     * outside every region's old radius circle but still inside Nepal's
+     * bounding box would previously have been missed entirely.
+     */
     @Scheduled(fixedRateString = "${earthquake.usgs.fetch-interval-ms}")
     public void fetchEarthquakes() {
         try {
             log.info("Fetching earthquakes from USGS...");
+
+            String response;
+            try {
+                response = restTemplate.getForObject(usgs.getApiUrl(), String.class);
+            } catch (Exception e) {
+                log.error("USGS summary feed request failed: {}", e.getMessage());
+                return;
+            }
+
+            if (response == null || response.isEmpty()) {
+                log.warn("No response from USGS summary feed");
+                return;
+            }
+
+            JsonNode root = objectMapper.readTree(response);
+            JsonNode features = root.path("features");
+
             int totalCount = 0;
-
-            for (Map<String, Object> region : queryRegions) {
-                String regionName = (String) region.get("name");
-                double lat = ((Number) region.get("latitude")).doubleValue();
-                double lon = ((Number) region.get("longitude")).doubleValue();
-
-                String params = "format=geojson&"
-                        + "orderby=time&"
-                        + "limit=10&"
-                        + "minmagnitude=" + usgs.getMinMagnitude() + "&"
-                        + "latitude=" + lat + "&"
-                        + "longitude=" + lon + "&"
-                        + "maxradiuskm=" + usgs.getMaxRadiusKm();
-
-                String url = usgs.getApiUrl() + "?" + params;
-
-                String response;
-                try {
-                    response = restTemplate.getForObject(url, String.class);
-                } catch (Exception e) {
-                    log.error("USGS request failed for {} region: {}", regionName, e.getMessage());
+            for (JsonNode feature : features) {
+                HazardEvent event = parseEarthquake(feature);
+                if (event == null || event.getMagnitude() < usgs.getMinMagnitude() || !isInNepal(event)) {
                     continue;
                 }
-
-                if (response == null || response.isEmpty()) {
-                    log.warn("No response from {} query", regionName);
-                    continue;
+                if (!earthquakeExists(event)) {
+                    hazardEventRepository.save(event);
+                    totalCount++;
                 }
-
-                JsonNode root = objectMapper.readTree(response);
-                JsonNode features = root.path("features");
-
-                int regionCount = 0;
-                for (JsonNode feature : features) {
-                    HazardEvent event = parseEarthquake(feature);
-                    if (event != null && isInNepal(event)) {
-                        if (!earthquakeExists(event)) {
-                            hazardEventRepository.save(event);
-                            regionCount++;
-                            totalCount++;
-                        }
-                    }
-                }
-
-                log.info("{} region: Added {} earthquakes", regionName, regionCount);
             }
 
             log.info("Total earthquakes added: {}", totalCount);
+
+            // A genuinely new detection (especially a landslide-type one)
+            // shouldn't sit unused for up to 30 minutes until the next
+            // scheduled scan - rescan immediately so the score and any
+            // floor it triggers reflect it within this same poll cycle.
+            if (totalCount > 0) {
+                log.info("New hazard event(s) detected - triggering immediate risk rescan");
+                glofRiskScanService.scanAll();
+            }
 
         } catch (Exception e) {
             log.error("Error fetching earthquakes: {}", e.getMessage(), e);
@@ -188,15 +189,10 @@ public class UsgsEarthquakeService {
         this.glacierZone = glacierZone;
     }
 
-    public void setQueryRegions(List<Map<String, Object>> queryRegions) {
-        this.queryRegions = queryRegions;
-    }
-
     public static class Usgs {
         private String apiUrl;
         private long fetchIntervalMs;
         private double minMagnitude;
-        private int maxRadiusKm;
 
         public String getApiUrl() {
             return apiUrl;
@@ -220,14 +216,6 @@ public class UsgsEarthquakeService {
 
         public void setMinMagnitude(double minMagnitude) {
             this.minMagnitude = minMagnitude;
-        }
-
-        public int getMaxRadiusKm() {
-            return maxRadiusKm;
-        }
-
-        public void setMaxRadiusKm(int maxRadiusKm) {
-            this.maxRadiusKm = maxRadiusKm;
         }
     }
 

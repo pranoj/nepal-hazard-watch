@@ -107,7 +107,13 @@ public class GlacierSyncService {
         Optional<Glacier> existing = glacierRepository.findByRgiId(glacier.getRgiId());
         boolean isNew = existing.isEmpty();
 
-        existing.ifPresent(existingGlacier -> glacier.setId(existingGlacier.getId()));
+        // Re-imported from the static RGI CSV on every startup, so anything
+        // computed separately (like the local terrain slope) must be carried
+        // forward explicitly or it gets silently wiped back to null here.
+        existing.ifPresent(existingGlacier -> {
+            glacier.setId(existingGlacier.getId());
+            glacier.setLocalSlopeDeg(existingGlacier.getLocalSlopeDeg());
+        });
         if (isNew) {
             glacier.setCreatedAt(LocalDateTime.now());
         }

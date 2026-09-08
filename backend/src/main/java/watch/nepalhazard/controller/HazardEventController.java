@@ -12,7 +12,7 @@ import watch.nepalhazard.repository.HazardEventRepository;
 
 @RestController
 @RequestMapping("/hazard-events")
-@CrossOrigin(origins = "http://localhost:5173")
+@CrossOrigin(origins = "${app.cors.allowed-origin:http://localhost:5173}")
 public class HazardEventController {
 
     private final HazardEventRepository hazardEventRepository;

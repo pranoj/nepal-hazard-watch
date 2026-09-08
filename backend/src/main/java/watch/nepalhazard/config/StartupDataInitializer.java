@@ -7,6 +7,8 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import watch.nepalhazard.service.GlacierSyncService;
 import watch.nepalhazard.service.ICIMODGlacialLakeService;
+import watch.nepalhazard.service.SatelliteLakeTrackingService;
+import watch.nepalhazard.service.TerrainSlopeService;
 
 /**
  * Startup data initializer
@@ -27,16 +29,9 @@ public class StartupDataInitializer {
 
     private final ICIMODGlacialLakeService icimodGlacialLakeService;
     private final GlacierSyncService glacierSyncService;
+    private final TerrainSlopeService terrainSlopeService;
+    private final SatelliteLakeTrackingService satelliteLakeTrackingService;
 
-    /**
-     * Initialize ICIMOD data when Spring Boot application is ready
-     * This runs automatically on startup - no manual intervention needed!
-     * 
-     * Fires after:
-     * - All beans are created
-     * - Application context is fully loaded
-     * - Server is about to start listening for requests
-     */
     @EventListener(ApplicationReadyEvent.class)
     public void onApplicationReady() {
         log.info("═══════════════════════════════════════════════════════════");
@@ -44,16 +39,23 @@ public class StartupDataInitializer {
         log.info("═══════════════════════════════════════════════════════════");
 
         try {
-            // Initialize ICIMOD glacial lake data
             icimodGlacialLakeService.initializeICIMODData();
-
-            // Get count of loaded lakes
             long lakeCount = icimodGlacialLakeService.getNepalGlacialLakeCount();
 
             // Initialize "Type B" glacier watch points (steep terminus near
             // a known river corridor) - relies on river_basin_towns already
             // being seeded, which happens earlier via CommandLineRunner
             glacierSyncService.initializeGlacierData();
+
+            // Real local terminus slope, from elevation samples - runs once,
+            // skips glaciers that already have a value.
+            terrainSlopeService.fillMissingLocalSlopes();
+
+            // Real older Sentinel-2 reading for any lake that only has one
+            // observation so far, so growth comparison works immediately
+            // instead of waiting for the next live 5-day cycle. Skips lakes
+            // that already have two or more.
+            satelliteLakeTrackingService.backfillHistoricalBaseline();
 
             log.info("═══════════════════════════════════════════════════════════");
             log.info("✅ STARTUP COMPLETE - {} glacial lakes loaded from ICIMOD", lakeCount);

@@ -46,6 +46,14 @@ public class Glacier {
     @Column(name = "slope_deg", nullable = false)
     private Double slopeDeg;
 
+    /**
+     * Locally-computed slope near the actual terminus, from real elevation
+     * samples - more relevant to collapse risk than the whole-glacier RGI
+     * mean above. Null until the one-time terrain job fills it in.
+     */
+    @Column(name = "local_slope_deg")
+    private Double localSlopeDeg;
+
     @Column(name = "area_km2")
     private Double areaKm2;
 
