@@ -117,6 +117,56 @@ public class GlofRiskAssessment {
     @Column(name = "nearest_earthquake_id")
     private Long nearestEarthquakeId;
 
+    /**
+     * Real Sentinel-2 NDWI water fraction (0-1), from the most recent
+     * satellite pass with usable pixels. Null until a lake has at least
+     * one real observation. Glacier rows never have this - no lake to
+     * measure. See SatelliteLakeTrackingService.
+     */
+    @Column(name = "satellite_water_fraction")
+    private Double satelliteWaterFraction;
+
+    /**
+     * True if the water fraction grew meaningfully vs. the previous
+     * satellite reading. Always computed and stored, but only allowed to
+     * actually raise the alert level when satellite.escalation.enabled is
+     * true - see GLOFRiskCalculationService.
+     */
+    @Column(name = "satellite_lake_growth_detected", nullable = false)
+    private Boolean satelliteLakeGrowthDetected;
+
+    /**
+     * Real Sentinel-2 NDSI ice/snow-cover fraction (0-1) for a glacier
+     * terminus, from the most recent satellite pass with usable pixels.
+     * Null until a glacier has at least one real observation. Lake rows
+     * never have this - no glacier terminus box to measure. See
+     * SatelliteGlacierTrackingService.
+     */
+    @Column(name = "satellite_ice_fraction")
+    private Double satelliteIceFraction;
+
+    /**
+     * True if ice/snow cover dropped sharply vs. the previous satellite
+     * reading, within a short enough window to plausibly be a sudden event
+     * (terminus collapse) rather than ordinary seasonal melt. Always
+     * computed and stored, but only allowed to actually raise the alert
+     * level or score when satellite.glacier-factor.enabled is true - see
+     * GLOFRiskCalculationService.
+     */
+    @Column(name = "satellite_ice_sudden_drop_detected", nullable = false)
+    private Boolean satelliteIceSuddenDropDetected;
+
+    /**
+     * The satellite hazard value (0-1) actually weighted into the score:
+     * satelliteGrowth.hazard() for a LAKE row, iceDrop.hazard() for a
+     * GLACIER row. Distinct from satelliteWaterFraction/satelliteIceFraction
+     * above, which are the raw sensor reading, not the graded hazard - this
+     * is what the frontend needs to show a "Satellite factor: X%" row the
+     * same way it already shows rainfall/earthquake/landslide/etc.
+     */
+    @Column(name = "satellite_component")
+    private Double satelliteComponent;
+
     @Column(name = "assessed_at", nullable = false)
     private LocalDateTime assessedAt;
 }

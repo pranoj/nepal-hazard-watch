@@ -18,10 +18,14 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import watch.nepalhazard.entity.GlacialLake;
 import watch.nepalhazard.entity.Glacier;
+import watch.nepalhazard.entity.GlacierSatelliteObservation;
 import watch.nepalhazard.entity.GlofRiskAssessment;
 import watch.nepalhazard.entity.HazardEvent;
+import watch.nepalhazard.entity.LakeSatelliteObservation;
 import watch.nepalhazard.entity.Weather;
+import watch.nepalhazard.repository.GlacierSatelliteObservationRepository;
 import watch.nepalhazard.repository.HazardEventRepository;
+import watch.nepalhazard.repository.LakeSatelliteObservationRepository;
 import watch.nepalhazard.repository.RiverBasinTownRepository;
 import watch.nepalhazard.repository.WeatherRepository;
 
@@ -41,11 +45,18 @@ class GLOFRiskCalculationServiceTest {
     @Mock
     private RiverBasinTownRepository riverBasinTownRepository;
 
+    @Mock
+    private LakeSatelliteObservationRepository lakeSatelliteObservationRepository;
+
+    @Mock
+    private GlacierSatelliteObservationRepository glacierSatelliteObservationRepository;
+
     private GLOFRiskCalculationService service;
 
     @BeforeEach
     void setUp() {
-        service = new GLOFRiskCalculationService(weatherRepository, hazardEventRepository, riverBasinTownRepository);
+        service = new GLOFRiskCalculationService(weatherRepository, hazardEventRepository, riverBasinTownRepository,
+                lakeSatelliteObservationRepository, glacierSatelliteObservationRepository, false, false);
     }
 
     // ---- Mass weight (earthquake/landslide hazard scaled by real area) ----
@@ -335,6 +346,313 @@ class GLOFRiskCalculationServiceTest {
         // only the basin match should decide whether the floor fires.
         assertThat(sameBasinResult.getLandslideDetected()).isTrue();
         assertThat(otherBasinResult.getLandslideDetected()).isFalse();
+    }
+
+    // ---- Basin matching uses the river course, not just the nearest town ----
+
+    @Test
+    void basinMatch_findsTheCorrectBasinEvenWhenAStrayTownIsCloser() {
+        HazardEvent landslide = new HazardEvent();
+        landslide.setId(1L);
+        landslide.setEventType("EARTHQUAKE");
+        landslide.setSourceType("landslide");
+        landslide.setMagnitude(5.0);
+        landslide.setDepth(0.0);
+        // Sits on the line between BasinA's two curated towns (~150km apart),
+        // but far from either individual endpoint (~75km from each).
+        landslide.setLatitude(28.0);
+        landslide.setLongitude(85.763);
+        landslide.setEventTime(LocalDateTime.now().minusDays(1));
+
+        watch.nepalhazard.entity.RiverBasinTown basinAStart = watch.nepalhazard.entity.RiverBasinTown.builder()
+                .riverBasin("BasinA").townName("A-start").latitude(28.0).longitude(85.0).downstreamOrder(1).build();
+        watch.nepalhazard.entity.RiverBasinTown basinAEnd = watch.nepalhazard.entity.RiverBasinTown.builder()
+                .riverBasin("BasinA").townName("A-end").latitude(28.0).longitude(86.53).downstreamOrder(2).build();
+        // A single stray town from an unrelated basin, much closer in plain
+        // point distance (~22km) than either of BasinA's own reference towns.
+        watch.nepalhazard.entity.RiverBasinTown basinBTown = watch.nepalhazard.entity.RiverBasinTown.builder()
+                .riverBasin("BasinB").townName("B-town").latitude(27.8).longitude(85.763).downstreamOrder(1).build();
+
+        Glacier onBasinACourse = Glacier.builder()
+                .id(1L).rgiId("ON-COURSE").glacierName("On course")
+                .terminusLatitude(28.0).terminusLongitude(85.76)
+                .slopeDeg(35.0).areaKm2(1.0).nearestRiverBasin("BasinA")
+                .build();
+        Glacier taggedOtherBasin = Glacier.builder()
+                .id(2L).rgiId("OTHER-BASIN").glacierName("Tagged other basin")
+                .terminusLatitude(28.0).terminusLongitude(85.76)
+                .slopeDeg(35.0).areaKm2(1.0).nearestRiverBasin("BasinB")
+                .build();
+
+        when(hazardEventRepository.findRecentEarthquakes(any())).thenReturn(Collections.emptyList());
+        when(hazardEventRepository.findRecentLandslides(any())).thenReturn(List.of(landslide));
+        when(riverBasinTownRepository.findAll()).thenReturn(List.of(basinAStart, basinAEnd, basinBTown));
+        when(weatherRepository.findLatestByLocation(any())).thenReturn(Optional.empty());
+        when(weatherRepository.findNearestByCoordinates(anyDouble(), anyDouble())).thenReturn(Optional.empty());
+
+        GlofRiskAssessment onCourseResult = service.assessGlacier(onBasinACourse);
+        GlofRiskAssessment otherBasinResult = service.assessGlacier(taggedOtherBasin);
+
+        // The event genuinely sits on BasinA's river course, so a glacier
+        // tagged BasinA should get the floor even though neither of BasinA's
+        // own towns is individually close - and a glacier tagged BasinB
+        // should not, even though a single BasinB town happens to be nearer
+        // in plain point-distance than BasinA's own endpoints are.
+        assertThat(onCourseResult.getLandslideDetected()).isTrue();
+        assertThat(otherBasinResult.getLandslideDetected()).isFalse();
+    }
+
+    // ---- Satellite lake growth: computed and stored, escalates only when enabled ----
+
+    private GlacialLake testLake() {
+        return GlacialLake.builder()
+                .id(1L).icimodId("TEST-LAKE").lakeName("Test Lake")
+                .latitude(28.0).longitude(85.0).riskLevel("Low")
+                .build();
+    }
+
+    private void stubNoTriggers() {
+        when(hazardEventRepository.findRecentEarthquakes(any())).thenReturn(Collections.emptyList());
+        when(hazardEventRepository.findRecentLandslides(any())).thenReturn(Collections.emptyList());
+        when(weatherRepository.findLatestByLocation(any())).thenReturn(Optional.empty());
+        when(weatherRepository.findNearestByCoordinates(anyDouble(), anyDouble())).thenReturn(Optional.empty());
+    }
+
+    private LakeSatelliteObservation reading(double waterFraction, double validPixelFraction, LocalDateTime observedAt) {
+        LakeSatelliteObservation observation = new LakeSatelliteObservation();
+        observation.setWaterFraction(waterFraction);
+        observation.setValidPixelFraction(validPixelFraction);
+        observation.setObservedAt(observedAt);
+        return observation;
+    }
+
+    @Test
+    void satelliteGrowth_notDetectedWithOnlyOneObservation() {
+        GlacialLake lake = testLake();
+        stubNoTriggers();
+        when(lakeSatelliteObservationRepository.findTop2ByIcimodIdOrderByObservedAtDesc("TEST-LAKE"))
+                .thenReturn(List.of(reading(0.25, 0.9, LocalDateTime.now())));
+
+        GlofRiskAssessment result = service.assessLake(lake);
+
+        // A first-ever reading has nothing to compare against yet.
+        assertThat(result.getSatelliteWaterFraction()).isCloseTo(0.25, offset(1e-9));
+        assertThat(result.getSatelliteLakeGrowthDetected()).isFalse();
+    }
+
+    @Test
+    void satelliteGrowth_ignoresALowConfidenceJumpEvenIfLarge() {
+        GlacialLake lake = testLake();
+        stubNoTriggers();
+        // Water fraction jumped from 0.10 to 0.60 over a real 60-day gap,
+        // but neither reading has enough valid (non-cloud) coverage to
+        // trust that jump.
+        when(lakeSatelliteObservationRepository.findTop2ByIcimodIdOrderByObservedAtDesc("TEST-LAKE"))
+                .thenReturn(List.of(
+                        reading(0.60, 0.15, LocalDateTime.now()),
+                        reading(0.10, 0.20, LocalDateTime.now().minusDays(60))));
+
+        GlofRiskAssessment result = service.assessLake(lake);
+
+        assertThat(result.getSatelliteLakeGrowthDetected()).isFalse();
+    }
+
+    @Test
+    void satelliteGrowth_ignoresAComparisonWindowThatIsTooShort() {
+        GlacialLake lake = testLake();
+        stubNoTriggers();
+        // Same real jump as the "escalates" test below, both readings
+        // trustworthy - but only 5 days apart, too short to annualize
+        // sensibly (SATELLITE_MIN_COMPARISON_DAYS is 20).
+        when(lakeSatelliteObservationRepository.findTop2ByIcimodIdOrderByObservedAtDesc("TEST-LAKE"))
+                .thenReturn(List.of(
+                        reading(0.25, 0.9, LocalDateTime.now()),
+                        reading(0.20, 0.9, LocalDateTime.now().minusDays(5))));
+
+        GlofRiskAssessment result = service.assessLake(lake);
+
+        assertThat(result.getSatelliteLakeGrowthDetected()).isFalse();
+    }
+
+    @Test
+    void satelliteGrowth_detectedButDoesNotEscalateWhenDisabled() {
+        GlacialLake lake = testLake();
+        stubNoTriggers();
+        // 25% relative growth (0.20 -> 0.25) over a real 60-day gap,
+        // annualizes to a rate real HKH-wide data says is a clear outlier,
+        // not noise - but the shared `service` instance has the satellite
+        // factor disabled (the default), so it can't affect the alert.
+        when(lakeSatelliteObservationRepository.findTop2ByIcimodIdOrderByObservedAtDesc("TEST-LAKE"))
+                .thenReturn(List.of(
+                        reading(0.25, 0.9, LocalDateTime.now()),
+                        reading(0.20, 0.9, LocalDateTime.now().minusDays(60))));
+
+        GlofRiskAssessment result = service.assessLake(lake);
+
+        assertThat(result.getSatelliteLakeGrowthDetected()).isTrue();
+        assertThat(result.getAlertLevel()).isEqualTo("NORMAL");
+
+        // Disabled means the satellite term contributes nothing and the
+        // other five weights are exactly today's 20/25/25/20/10 - real
+        // growth being computed in the background must not shift the score
+        // by even a fraction of a point while the switch is off.
+        double seasonalModifier = service.calculateSeasonalModifier(LocalDateTime.now());
+        double expectedScore = 20.0 * 0.15 + 10.0 * seasonalModifier;
+        assertThat(result.getRiskScore()).isCloseTo(expectedScore, offset(1e-9));
+    }
+
+    @Test
+    void satelliteGrowth_escalatesToWatchWhenEnabled() {
+        GLOFRiskCalculationService escalatingService = new GLOFRiskCalculationService(
+                weatherRepository, hazardEventRepository, riverBasinTownRepository,
+                lakeSatelliteObservationRepository, glacierSatelliteObservationRepository, true, false);
+
+        GlacialLake lake = testLake();
+        stubNoTriggers();
+        when(lakeSatelliteObservationRepository.findTop2ByIcimodIdOrderByObservedAtDesc("TEST-LAKE"))
+                .thenReturn(List.of(
+                        reading(0.25, 0.9, LocalDateTime.now()),
+                        reading(0.20, 0.9, LocalDateTime.now().minusDays(60))));
+
+        GlofRiskAssessment result = escalatingService.assessLake(lake);
+
+        assertThat(result.getSatelliteLakeGrowthDetected()).isTrue();
+        assertThat(result.getAlertLevel()).isEqualTo("WATCH");
+
+        // 152%/year annualized is far past the real 18%/year saturation
+        // point, so satellite hazard should be fully saturated at 1.0,
+        // contributing exactly its 15-point weight - and the other four
+        // weights should be the redistributed (x0.85) values, not the
+        // original 20/25/25/20/10, given the factor is enabled here.
+        double seasonalModifier = escalatingService.calculateSeasonalModifier(LocalDateTime.now());
+        double expectedScore = 17.0 * 0 + 21.25 * 0 + 21.25 * 0 + 17.0 * 0.15 + 8.5 * seasonalModifier + 15.0 * 1.0;
+        assertThat(result.getRiskScore()).isCloseTo(expectedScore, offset(0.05));
+    }
+
+    // ---- Satellite glacier ice-cover sudden drop: computed and stored, escalates only when enabled ----
+
+    private Glacier testGlacier() {
+        return Glacier.builder()
+                .id(1L).rgiId("TEST-GLACIER").glacierName("Test Glacier")
+                .terminusLatitude(28.0).terminusLongitude(85.0)
+                .slopeDeg(35.0).areaKm2(1.0)
+                .build();
+    }
+
+    private GlacierSatelliteObservation iceReading(double iceFraction, double validPixelFraction,
+            LocalDateTime observedAt) {
+        GlacierSatelliteObservation observation = new GlacierSatelliteObservation();
+        observation.setIceFraction(iceFraction);
+        observation.setValidPixelFraction(validPixelFraction);
+        observation.setObservedAt(observedAt);
+        return observation;
+    }
+
+    @Test
+    void iceDrop_notDetectedWithOnlyOneObservation() {
+        Glacier glacier = testGlacier();
+        stubNoTriggers();
+        when(glacierSatelliteObservationRepository.findTop2ByRgiIdOrderByObservedAtDesc("TEST-GLACIER"))
+                .thenReturn(List.of(iceReading(0.40, 0.9, LocalDateTime.now())));
+
+        GlofRiskAssessment result = service.assessGlacier(glacier);
+
+        // A first-ever reading has nothing to compare against yet - this is
+        // exactly the "today is the baseline" cold start.
+        assertThat(result.getSatelliteIceFraction()).isCloseTo(0.40, offset(1e-9));
+        assertThat(result.getSatelliteIceSuddenDropDetected()).isFalse();
+    }
+
+    @Test
+    void iceDrop_ignoresALowConfidenceDropEvenIfLarge() {
+        Glacier glacier = testGlacier();
+        stubNoTriggers();
+        // Ice fraction fell from 0.70 to 0.10 (a 60-point drop) over 5 days,
+        // but neither reading has enough valid (non-cloud) coverage to
+        // trust that - a cloud passing over looks exactly like ice vanishing.
+        when(glacierSatelliteObservationRepository.findTop2ByRgiIdOrderByObservedAtDesc("TEST-GLACIER"))
+                .thenReturn(List.of(
+                        iceReading(0.10, 0.15, LocalDateTime.now()),
+                        iceReading(0.70, 0.20, LocalDateTime.now().minusDays(5))));
+
+        GlofRiskAssessment result = service.assessGlacier(glacier);
+
+        assertThat(result.getSatelliteIceSuddenDropDetected()).isFalse();
+    }
+
+    @Test
+    void iceDrop_ignoresAComparisonWindowThatIsTooLongToBeSudden() {
+        Glacier glacier = testGlacier();
+        stubNoTriggers();
+        // Same real drop as the "escalates" test below, both readings
+        // trustworthy - but 60 days apart, too long to call "sudden"
+        // (SATELLITE_ICE_MAX_COMPARISON_DAYS is 15) - more likely ordinary
+        // seasonal melt than a collapse.
+        when(glacierSatelliteObservationRepository.findTop2ByRgiIdOrderByObservedAtDesc("TEST-GLACIER"))
+                .thenReturn(List.of(
+                        iceReading(0.10, 0.9, LocalDateTime.now()),
+                        iceReading(0.70, 0.9, LocalDateTime.now().minusDays(60))));
+
+        GlofRiskAssessment result = service.assessGlacier(glacier);
+
+        assertThat(result.getSatelliteIceSuddenDropDetected()).isFalse();
+    }
+
+    @Test
+    void iceDrop_detectedButDoesNotEscalateWhenDisabled() {
+        Glacier glacier = testGlacier();
+        stubNoTriggers();
+        // 60-point drop (0.70 -> 0.10) over a real 5-day gap, well past the
+        // 30-point sudden-drop floor - but the shared `service` instance
+        // has the glacier satellite factor disabled (the default), so it
+        // can't affect the alert or score.
+        when(glacierSatelliteObservationRepository.findTop2ByRgiIdOrderByObservedAtDesc("TEST-GLACIER"))
+                .thenReturn(List.of(
+                        iceReading(0.10, 0.9, LocalDateTime.now()),
+                        iceReading(0.70, 0.9, LocalDateTime.now().minusDays(5))));
+
+        GlofRiskAssessment result = service.assessGlacier(glacier);
+
+        assertThat(result.getSatelliteIceSuddenDropDetected()).isTrue();
+        assertThat(result.getAlertLevel()).isEqualTo("NORMAL");
+
+        // Disabled means the satellite term contributes nothing and the
+        // other five weights are exactly today's 20/25/25/20/10 - a real
+        // drop being computed in the background must not shift the score
+        // by even a fraction of a point while the switch is off.
+        double seasonalModifier = service.calculateSeasonalModifier(LocalDateTime.now());
+        double steepnessFactor = service.calculateSteepnessFactor(35.0);
+        double expectedScore = 20.0 * steepnessFactor + 10.0 * seasonalModifier;
+        assertThat(result.getRiskScore()).isCloseTo(expectedScore, offset(1e-9));
+    }
+
+    @Test
+    void iceDrop_escalatesToWatchWhenEnabled() {
+        GLOFRiskCalculationService escalatingService = new GLOFRiskCalculationService(
+                weatherRepository, hazardEventRepository, riverBasinTownRepository,
+                lakeSatelliteObservationRepository, glacierSatelliteObservationRepository, false, true);
+
+        Glacier glacier = testGlacier();
+        stubNoTriggers();
+        when(glacierSatelliteObservationRepository.findTop2ByRgiIdOrderByObservedAtDesc("TEST-GLACIER"))
+                .thenReturn(List.of(
+                        iceReading(0.10, 0.9, LocalDateTime.now()),
+                        iceReading(0.70, 0.9, LocalDateTime.now().minusDays(5))));
+
+        GlofRiskAssessment result = escalatingService.assessGlacier(glacier);
+
+        assertThat(result.getSatelliteIceSuddenDropDetected()).isTrue();
+        assertThat(result.getAlertLevel()).isEqualTo("WATCH");
+
+        // 60-point drop is past the 50-point saturation ceiling, so ice-drop
+        // hazard should be fully saturated at 1.0, contributing exactly its
+        // 15-point weight - and the other four weights should be the
+        // redistributed (x0.85) values, not the original 20/25/25/20/10.
+        double seasonalModifier = escalatingService.calculateSeasonalModifier(LocalDateTime.now());
+        double steepnessFactor = escalatingService.calculateSteepnessFactor(35.0);
+        double expectedScore = 17.0 * 0 + 21.25 * 0 + 21.25 * 0
+                + 17.0 * steepnessFactor + 8.5 * seasonalModifier + 15.0 * 1.0;
+        assertThat(result.getRiskScore()).isCloseTo(expectedScore, offset(0.05));
     }
 
     private Weather weatherReading(String location, double temperature, double rainfall) {

@@ -3,17 +3,25 @@ package watch.nepalhazard.service;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import watch.nepalhazard.entity.GlacialLake;
 import watch.nepalhazard.entity.Glacier;
+import watch.nepalhazard.entity.GlacierSatelliteObservation;
 import watch.nepalhazard.entity.GlofRiskAssessment;
 import watch.nepalhazard.entity.HazardEvent;
+import watch.nepalhazard.entity.LakeSatelliteObservation;
 import watch.nepalhazard.entity.RiverBasinTown;
 import watch.nepalhazard.entity.Weather;
+import watch.nepalhazard.repository.GlacierSatelliteObservationRepository;
 import watch.nepalhazard.repository.HazardEventRepository;
+import watch.nepalhazard.repository.LakeSatelliteObservationRepository;
 import watch.nepalhazard.repository.RiverBasinTownRepository;
 import watch.nepalhazard.repository.WeatherRepository;
 
@@ -35,19 +43,79 @@ public class GLOFRiskCalculationService {
     // that's resolvable. Doesn't apply to earthquakes, which aren't confined
     // to a watershed.
     private static final double BASIN_MATCH_MAX_KM = 60.0;
+    private static final double KM_PER_DEG_LAT = 111.32;
     private static final List<String> ALERT_ORDER = List.of("NORMAL", "WATCH", "DANGER", "EXTREME");
+    // Below this fraction of usable (non-cloud) pixels, a reading isn't
+    // trustworthy enough to base a growth comparison on either side of it.
+    private static final double SATELLITE_MIN_VALID_PIXEL_FRACTION = 0.30;
+    // A shorter gap makes the annualized rate below noisy (extrapolating a
+    // few days of measurement error out to a full year) - real satellite
+    // classification jitter needs enough elapsed time to average out.
+    private static final long SATELLITE_MIN_COMPARISON_DAYS = 20;
+    // Calibrated against a real dataset (Rawlins, Watson et al. 2025, "Glacial
+    // Lake Observatory": 4,150 Himalayan/HKH lakes, Sentinel-2, 2017-2024,
+    // Zenodo doi:10.5281/zenodo.17802333), not guessed. Their own
+    // statistically-significant-growth lakes averaged ~2.7%/year (median
+    // 1.9%), reaching ~9%/year at the 90th percentile and ~18%/year at the
+    // extreme. Their non-significant (background noise) lakes topped out
+    // around 1.8-2.9%/year at the 90th percentile. So: below ~2%/year,
+    // relative growth is indistinguishable from ordinary measurement noise;
+    // above ~18%/year is about as dramatic as any real lake in that dataset
+    // got. The hazard term ramps smoothly between those two real reference
+    // points instead of a single hard cutoff.
+    private static final double SATELLITE_NOISE_FLOOR_PCT_PER_YEAR = 2.0;
+    private static final double SATELLITE_HAZARD_SATURATION_PCT_PER_YEAR = 18.0;
+    // Separate, higher bar for the hard WATCH floor (not just contributing
+    // to the weighted score) - set near the real 90th-percentile rate among
+    // that dataset's statistically-significant lakes (~9%/year), so the
+    // floor only fires for growth that real data suggests is a genuine
+    // outlier, not merely "somewhat above average."
+    private static final double SATELLITE_GROWTH_FLOOR_PCT_PER_YEAR = 8.0;
+
+    // --- Glacier ice/snow-cover sudden-drop thresholds ---
+    // Unlike the lake growth constants above, these are NOT backed by a
+    // published calibration dataset - no HKH-wide equivalent of the GLO
+    // dataset exists for short-window terminus ice-cover volatility. These
+    // are a physically-reasoned first pass (a real terminus collapse, e.g.
+    // Langtang Lirung Aug 2026, is a fast structural event measured in
+    // hours/days, not a gradual seasonal one) and should be treated as
+    // provisional MVP defaults pending real observation history, same as
+    // the lake threshold was before it got calibrated.
+    private static final double SATELLITE_ICE_MIN_VALID_PIXEL_FRACTION = 0.30;
+    // Caps how far apart the two compared readings can be - a drop spread
+    // over months is far more likely to be ordinary seasonal ablation than
+    // a sudden collapse, so only a short gap counts as "sudden" at all.
+    private static final long SATELLITE_ICE_MAX_COMPARISON_DAYS = 15;
+    // Absolute percentage-point drop in the box's classified ice/snow
+    // fraction (not relative - termini often sit near zero already, where a
+    // relative-rate metric like the lake one breaks down).
+    private static final double SATELLITE_ICE_NOISE_FLOOR_PCT_POINTS = 15.0;
+    private static final double SATELLITE_ICE_HAZARD_SATURATION_PCT_POINTS = 50.0;
+    private static final double SATELLITE_ICE_DROP_FLOOR_PCT_POINTS = 30.0;
 
     private final WeatherRepository weatherRepository;
     private final HazardEventRepository hazardEventRepository;
     private final RiverBasinTownRepository riverBasinTownRepository;
+    private final LakeSatelliteObservationRepository lakeSatelliteObservationRepository;
+    private final GlacierSatelliteObservationRepository glacierSatelliteObservationRepository;
+    private final boolean satelliteFactorEnabled;
+    private final boolean satelliteGlacierFactorEnabled;
 
     @Autowired
     public GLOFRiskCalculationService(WeatherRepository weatherRepository,
             HazardEventRepository hazardEventRepository,
-            RiverBasinTownRepository riverBasinTownRepository) {
+            RiverBasinTownRepository riverBasinTownRepository,
+            LakeSatelliteObservationRepository lakeSatelliteObservationRepository,
+            GlacierSatelliteObservationRepository glacierSatelliteObservationRepository,
+            @Value("${satellite.factor.enabled:false}") boolean satelliteFactorEnabled,
+            @Value("${satellite.glacier-factor.enabled:false}") boolean satelliteGlacierFactorEnabled) {
         this.weatherRepository = weatherRepository;
         this.hazardEventRepository = hazardEventRepository;
         this.riverBasinTownRepository = riverBasinTownRepository;
+        this.lakeSatelliteObservationRepository = lakeSatelliteObservationRepository;
+        this.glacierSatelliteObservationRepository = glacierSatelliteObservationRepository;
+        this.satelliteFactorEnabled = satelliteFactorEnabled;
+        this.satelliteGlacierFactorEnabled = satelliteGlacierFactorEnabled;
     }
 
     /**
@@ -71,12 +139,26 @@ public class GLOFRiskCalculationService {
                 lake.getRiverBasin());
         double earthquakeHazard = eqInfluence.hazard() * massWeight;
         double landslideHazard = lsInfluence.hazard() * massWeight;
+        SatelliteLakeGrowth satelliteGrowth = assessSatelliteLakeGrowth(lake.getIcimodId());
 
-        double riskScore = 20 * earthquakeHazard
-                + 25 * landslideHazard
-                + 25 * rainfall.hazard()
-                + 20 * lakeTypeFactor
-                + 10 * seasonalModifier;
+        // When the satellite factor is off, these are exactly today's
+        // 20/25/25/20/10 weights and satelliteWeight is 0 - identical output
+        // to before this existed. When on, all five existing weights scale
+        // down proportionally (each x0.85) to make room for satellite at 15,
+        // rather than just adding 15 points on top of an already-100 scale.
+        double earthquakeWeight = satelliteFactorEnabled ? 17.0 : 20.0;
+        double landslideWeight = satelliteFactorEnabled ? 21.25 : 25.0;
+        double rainfallWeight = satelliteFactorEnabled ? 21.25 : 25.0;
+        double lakeTypeWeight = satelliteFactorEnabled ? 17.0 : 20.0;
+        double seasonWeight = satelliteFactorEnabled ? 8.5 : 10.0;
+        double satelliteWeight = satelliteFactorEnabled ? 15.0 : 0.0;
+
+        double riskScore = earthquakeWeight * earthquakeHazard
+                + landslideWeight * landslideHazard
+                + rainfallWeight * rainfall.hazard()
+                + lakeTypeWeight * lakeTypeFactor
+                + seasonWeight * seasonalModifier
+                + satelliteWeight * satelliteGrowth.hazard();
         riskScore = Math.max(0, Math.min(100, riskScore));
 
         String alertLevel = getAlertLevel(riskScore);
@@ -84,6 +166,9 @@ public class GLOFRiskCalculationService {
             alertLevel = escalate(alertLevel, "WATCH");
         }
         if ("HEAVY".equals(rainfall.condition())) {
+            alertLevel = escalate(alertLevel, "WATCH");
+        }
+        if (satelliteFactorEnabled && satelliteGrowth.growthDetected()) {
             alertLevel = escalate(alertLevel, "WATCH");
         }
 
@@ -108,8 +193,68 @@ public class GLOFRiskCalculationService {
         assessment.setMeltCondition(meltCondition);
         assessment.setNearestEarthquakeId(
                 lsInfluence.eventId() != null ? lsInfluence.eventId() : eqInfluence.earthquakeId());
+        assessment.setSatelliteWaterFraction(satelliteGrowth.currentWaterFraction());
+        assessment.setSatelliteLakeGrowthDetected(satelliteGrowth.growthDetected());
+        assessment.setSatelliteComponent(satelliteGrowth.hazard());
+        // No glacier terminus box to measure for a lake row - always
+        // false/null, never a live ice-cover reading.
+        assessment.setSatelliteIceFraction(null);
+        assessment.setSatelliteIceSuddenDropDetected(false);
         assessment.setAssessedAt(LocalDateTime.now());
         return assessment;
+    }
+
+    /**
+     * Compares the two most recent real Sentinel-2 water-fraction readings
+     * for this lake (see SatelliteLakeTrackingService), converts the change
+     * to an annualized relative rate, and grades it against real HKH-wide
+     * growth-rate statistics (see the SATELLITE_* constants above) rather
+     * than an arbitrary raw-percentage jump. No-growth whenever there's no
+     * prior reading, the gap is too short to annualize sensibly, the
+     * previous reading is too close to zero to divide by meaningfully, or
+     * either reading has too little valid (non-cloud) coverage to trust.
+     * Lakes only - glaciers have no lake to measure.
+     */
+    private SatelliteLakeGrowth assessSatelliteLakeGrowth(String icimodId) {
+        if (icimodId == null) {
+            return new SatelliteLakeGrowth(null, 0, false);
+        }
+        List<LakeSatelliteObservation> recent = lakeSatelliteObservationRepository
+                .findTop2ByIcimodIdOrderByObservedAtDesc(icimodId);
+        if (recent.isEmpty()) {
+            return new SatelliteLakeGrowth(null, 0, false);
+        }
+
+        LakeSatelliteObservation latest = recent.get(0);
+        if (recent.size() < 2) {
+            return new SatelliteLakeGrowth(latest.getWaterFraction(), 0, false);
+        }
+
+        LakeSatelliteObservation previous = recent.get(1);
+        boolean bothTrustworthy = latest.getValidPixelFraction() >= SATELLITE_MIN_VALID_PIXEL_FRACTION
+                && previous.getValidPixelFraction() >= SATELLITE_MIN_VALID_PIXEL_FRACTION;
+
+        long daysBetween = Duration.between(previous.getObservedAt(), latest.getObservedAt()).toDays();
+        boolean comparisonLongEnough = daysBetween >= SATELLITE_MIN_COMPARISON_DAYS;
+        boolean previousBaselineUsable = previous.getWaterFraction() != null && previous.getWaterFraction() >= 0.02;
+
+        if (!bothTrustworthy || !comparisonLongEnough || !previousBaselineUsable) {
+            return new SatelliteLakeGrowth(latest.getWaterFraction(), 0, false);
+        }
+
+        double relativeChangePct = (latest.getWaterFraction() - previous.getWaterFraction())
+                / previous.getWaterFraction() * 100.0;
+        double annualizedRatePct = relativeChangePct * (365.0 / daysBetween);
+
+        double hazard = Math.max(0, Math.min(1,
+                (annualizedRatePct - SATELLITE_NOISE_FLOOR_PCT_PER_YEAR)
+                        / (SATELLITE_HAZARD_SATURATION_PCT_PER_YEAR - SATELLITE_NOISE_FLOOR_PCT_PER_YEAR)));
+        boolean grew = annualizedRatePct > SATELLITE_GROWTH_FLOOR_PCT_PER_YEAR;
+
+        return new SatelliteLakeGrowth(latest.getWaterFraction(), hazard, grew);
+    }
+
+    private record SatelliteLakeGrowth(Double currentWaterFraction, double hazard, boolean growthDetected) {
     }
 
     /**
@@ -121,12 +266,13 @@ public class GLOFRiskCalculationService {
     public GlofRiskAssessment assessGlacier(Glacier glacier) {
         RainfallAssessment rainfall = assessRainfall(glacier.getRgiId(), glacier.getTerminusLatitude(),
                 glacier.getTerminusLongitude());
-        double steepnessFactor = calculateSteepnessFactor(glacier.getSlopeDeg());
+        double effectiveSlopeDeg = effectiveSlopeDeg(glacier);
+        double steepnessFactor = calculateSteepnessFactor(effectiveSlopeDeg);
         double seasonalModifier = calculateSeasonalModifier(LocalDateTime.now());
         boolean meltCondition = calculateMeltCondition(glacier.getRgiId(), glacier.getTerminusLatitude(),
                 glacier.getTerminusLongitude());
         double massWeight = calculateMassWeight(glacier.getAreaKm2());
-        boolean landslidePreCondition = calculateLandslidePreCondition(glacier.getSlopeDeg(), rainfall.condition());
+        boolean landslidePreCondition = calculateLandslidePreCondition(effectiveSlopeDeg, rainfall.condition());
 
         EarthquakeInfluence eqInfluence = findStrongestNearbyEarthquake(glacier.getTerminusLatitude(),
                 glacier.getTerminusLongitude());
@@ -134,12 +280,24 @@ public class GLOFRiskCalculationService {
                 glacier.getTerminusLongitude(), glacier.getNearestRiverBasin());
         double earthquakeHazard = eqInfluence.hazard() * massWeight;
         double landslideHazard = lsInfluence.hazard() * massWeight;
+        SatelliteIceDrop iceDrop = assessSatelliteIceDrop(glacier.getRgiId());
 
-        double riskScore = 20 * earthquakeHazard
-                + 25 * landslideHazard
-                + 25 * rainfall.hazard()
-                + 20 * steepnessFactor
-                + 10 * seasonalModifier;
+        // Same shape as assessLake(): weights scale down x0.85 when the
+        // glacier satellite factor is on, to make room for a 15-point ice-
+        // drop term, and stay at today's 20/25/25/20/10 otherwise.
+        double earthquakeWeight = satelliteGlacierFactorEnabled ? 17.0 : 20.0;
+        double landslideWeight = satelliteGlacierFactorEnabled ? 21.25 : 25.0;
+        double rainfallWeight = satelliteGlacierFactorEnabled ? 21.25 : 25.0;
+        double steepnessWeight = satelliteGlacierFactorEnabled ? 17.0 : 20.0;
+        double seasonWeight = satelliteGlacierFactorEnabled ? 8.5 : 10.0;
+        double satelliteWeight = satelliteGlacierFactorEnabled ? 15.0 : 0.0;
+
+        double riskScore = earthquakeWeight * earthquakeHazard
+                + landslideWeight * landslideHazard
+                + rainfallWeight * rainfall.hazard()
+                + steepnessWeight * steepnessFactor
+                + seasonWeight * seasonalModifier
+                + satelliteWeight * iceDrop.hazard();
         riskScore = Math.max(0, Math.min(100, riskScore));
 
         String alertLevel = getAlertLevel(riskScore);
@@ -150,6 +308,9 @@ public class GLOFRiskCalculationService {
             alertLevel = escalate(alertLevel, "WATCH");
         }
         if (landslidePreCondition) {
+            alertLevel = escalate(alertLevel, "WATCH");
+        }
+        if (satelliteGlacierFactorEnabled && iceDrop.suddenDropDetected()) {
             alertLevel = escalate(alertLevel, "WATCH");
         }
 
@@ -174,8 +335,66 @@ public class GLOFRiskCalculationService {
         assessment.setMeltCondition(meltCondition);
         assessment.setNearestEarthquakeId(
                 lsInfluence.eventId() != null ? lsInfluence.eventId() : eqInfluence.earthquakeId());
+        // No lake to measure for a glacier watch point - always false/null,
+        // never a live satellite reading.
+        assessment.setSatelliteLakeGrowthDetected(false);
+        assessment.setSatelliteWaterFraction(null);
+        assessment.setSatelliteIceFraction(iceDrop.currentIceFraction());
+        assessment.setSatelliteIceSuddenDropDetected(iceDrop.suddenDropDetected());
+        assessment.setSatelliteComponent(iceDrop.hazard());
         assessment.setAssessedAt(LocalDateTime.now());
         return assessment;
+    }
+
+    /**
+     * Compares the two most recent real Sentinel-2 ice/snow-cover readings
+     * for this glacier terminus (see SatelliteGlacierTrackingService) and
+     * flags a sharp, short-window drop as a possible sudden terminus
+     * collapse - as opposed to the lake growth comparison, this uses an
+     * absolute percentage-point drop (not a relative rate) and caps how far
+     * apart the readings can be, since a slow multi-week decline is far
+     * more likely to be ordinary seasonal melt than a real collapse.
+     * No-drop whenever there's no prior reading, the gap is too long to
+     * call "sudden", or either reading has too little valid (non-cloud)
+     * coverage to trust. Glaciers only - lakes have no terminus to measure.
+     */
+    private SatelliteIceDrop assessSatelliteIceDrop(String rgiId) {
+        if (rgiId == null) {
+            return new SatelliteIceDrop(null, 0, false);
+        }
+        List<GlacierSatelliteObservation> recent = glacierSatelliteObservationRepository
+                .findTop2ByRgiIdOrderByObservedAtDesc(rgiId);
+        if (recent.isEmpty()) {
+            return new SatelliteIceDrop(null, 0, false);
+        }
+
+        GlacierSatelliteObservation latest = recent.get(0);
+        if (recent.size() < 2) {
+            return new SatelliteIceDrop(latest.getIceFraction(), 0, false);
+        }
+
+        GlacierSatelliteObservation previous = recent.get(1);
+        boolean bothTrustworthy = latest.getValidPixelFraction() >= SATELLITE_ICE_MIN_VALID_PIXEL_FRACTION
+                && previous.getValidPixelFraction() >= SATELLITE_ICE_MIN_VALID_PIXEL_FRACTION;
+
+        long daysBetween = Duration.between(previous.getObservedAt(), latest.getObservedAt()).toDays();
+        boolean suddenEnoughWindow = daysBetween <= SATELLITE_ICE_MAX_COMPARISON_DAYS;
+
+        if (!bothTrustworthy || !suddenEnoughWindow) {
+            return new SatelliteIceDrop(latest.getIceFraction(), 0, false);
+        }
+
+        double dropPctPoints = (previous.getIceFraction() - latest.getIceFraction()) * 100.0;
+
+        double hazard = Math.max(0, Math.min(1,
+                (dropPctPoints - SATELLITE_ICE_NOISE_FLOOR_PCT_POINTS)
+                        / (SATELLITE_ICE_HAZARD_SATURATION_PCT_POINTS - SATELLITE_ICE_NOISE_FLOOR_PCT_POINTS)));
+        boolean suddenDrop = dropPctPoints > SATELLITE_ICE_DROP_FLOOR_PCT_POINTS;
+
+        return new SatelliteIceDrop(latest.getIceFraction(), hazard, suddenDrop);
+    }
+
+    private record SatelliteIceDrop(Double currentIceFraction, double hazard, boolean suddenDropDetected) {
     }
 
     /**
@@ -305,10 +524,13 @@ public class GLOFRiskCalculationService {
     }
 
     /**
-     * True if the event's nearest curated basin town matches the lake's own
-     * basin. No real watershed polygons, so this is a nearest-neighbor
-     * proxy. Falls back to true (don't restrict) when either side can't be
-     * resolved, so missing data never silently suppresses a real floor.
+     * True if the event's nearest point on a curated river course matches
+     * the lake's own basin. No real watershed polygons, so this is still a
+     * proxy, but a nearer one: each basin's curated towns are already
+     * ordered downstream, so we measure distance to the course connecting
+     * them, not just to the nearest single town. Falls back to true (don't
+     * restrict) when either side can't be resolved, so missing data never
+     * silently suppresses a real floor.
      */
     private boolean isSameBasin(String ownBasin, double eventLat, double eventLon) {
         if (ownBasin == null || ownBasin.isBlank()) {
@@ -319,15 +541,34 @@ public class GLOFRiskCalculationService {
     }
 
     private Optional<String> findNearestBasin(double lat, double lon) {
-        List<RiverBasinTown> towns = riverBasinTownRepository.findAll();
+        Map<String, List<RiverBasinTown>> byBasin = riverBasinTownRepository.findAll().stream()
+                .collect(Collectors.groupingBy(RiverBasinTown::getRiverBasin));
 
         String nearestBasin = null;
         double bestDistance = Double.MAX_VALUE;
-        for (RiverBasinTown town : towns) {
-            double distanceKm = haversineDistance(town.getLatitude(), town.getLongitude(), lat, lon);
-            if (distanceKm < bestDistance) {
-                bestDistance = distanceKm;
-                nearestBasin = town.getRiverBasin();
+
+        for (Map.Entry<String, List<RiverBasinTown>> entry : byBasin.entrySet()) {
+            List<RiverBasinTown> course = entry.getValue().stream()
+                    .sorted(Comparator.comparingInt(RiverBasinTown::getDownstreamOrder))
+                    .toList();
+
+            for (int i = 0; i < course.size(); i++) {
+                double distanceKm;
+                if (i + 1 < course.size()) {
+                    RiverBasinTown a = course.get(i);
+                    RiverBasinTown b = course.get(i + 1);
+                    distanceKm = pointToSegmentDistanceKm(lat, lon,
+                            a.getLatitude(), a.getLongitude(), b.getLatitude(), b.getLongitude());
+                } else if (course.size() == 1) {
+                    RiverBasinTown a = course.get(0);
+                    distanceKm = haversineDistance(lat, lon, a.getLatitude(), a.getLongitude());
+                } else {
+                    continue;
+                }
+                if (distanceKm < bestDistance) {
+                    bestDistance = distanceKm;
+                    nearestBasin = entry.getKey();
+                }
             }
         }
 
@@ -335,6 +576,30 @@ public class GLOFRiskCalculationService {
             return Optional.empty();
         }
         return Optional.of(nearestBasin);
+    }
+
+    /**
+     * Shortest distance from a point to the line segment between two other
+     * points, approximating lat/lon as flat km using the query point's own
+     * latitude for the longitude scale factor - fine at the scale of one
+     * river segment, not meant to be survey-grade.
+     */
+    private double pointToSegmentDistanceKm(double lat, double lon, double lat1, double lon1, double lat2,
+            double lon2) {
+        double kmPerDegLon = KM_PER_DEG_LAT * Math.cos(Math.toRadians(lat));
+
+        double px = lon * kmPerDegLon, py = lat * KM_PER_DEG_LAT;
+        double ax = lon1 * kmPerDegLon, ay = lat1 * KM_PER_DEG_LAT;
+        double bx = lon2 * kmPerDegLon, by = lat2 * KM_PER_DEG_LAT;
+
+        double abx = bx - ax, aby = by - ay;
+        double abLengthSq = abx * abx + aby * aby;
+        double t = abLengthSq == 0 ? 0 : ((px - ax) * abx + (py - ay) * aby) / abLengthSq;
+        t = Math.max(0, Math.min(1, t));
+
+        double closestX = ax + t * abx, closestY = ay + t * aby;
+        double dx = px - closestX, dy = py - closestY;
+        return Math.sqrt(dx * dx + dy * dy);
     }
 
     /**
@@ -430,8 +695,18 @@ public class GLOFRiskCalculationService {
     }
 
     /** Terrain-steepness susceptibility from RGI's mean slope_deg. */
-    private double calculateSteepnessFactor(double slopeDeg) {
+    double calculateSteepnessFactor(double slopeDeg) {
         return Math.max(0, Math.min(1, (slopeDeg - 20.0) / 50.0));
+    }
+
+    /**
+     * Prefers the locally-computed terminus slope (real elevation samples
+     * near the actual failure zone) over RGI's whole-glacier mean, falling
+     * back to the RGI value whenever the local computation hasn't run yet
+     * or failed for that glacier.
+     */
+    private double effectiveSlopeDeg(Glacier glacier) {
+        return glacier.getLocalSlopeDeg() != null ? glacier.getLocalSlopeDeg() : glacier.getSlopeDeg();
     }
 
     /**
