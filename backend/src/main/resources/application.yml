@@ -1,9 +1,10 @@
 app:
-  # Every controller's @CrossOrigin reads this. Defaults to the local dev
-  # frontend so nothing changes for local development; set APP_CORS_ORIGIN
-  # to the real deployed frontend URL before going live.
+  # Read by CorsConfig. Defaults to the local dev frontend so nothing
+  # changes for local development; set APP_CORS_ORIGIN to the real deployed
+  # frontend origin(s) before going live - comma-separated if the frontend
+  # is reachable at more than one origin (e.g. bare domain + "www.").
   cors:
-    allowed-origin: ${APP_CORS_ORIGIN:http://localhost:5173}
+    allowed-origins: ${APP_CORS_ORIGIN:http://localhost:5173}
 
 spring:
   application:

@@ -83,7 +83,7 @@ export function Dashboard() {
                             Independent educational project, not an official warning system.
                             For real emergencies, follow guidance from{' '}
                             <a
-                                href="https://www.ndrrma.gov.np/"
+                                href="https://ndrrma.gov.np/en"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 style={{ color: '#cbd5e1', textDecoration: 'underline' }}

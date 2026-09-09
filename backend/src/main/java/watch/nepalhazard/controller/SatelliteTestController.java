@@ -3,7 +3,6 @@ package watch.nepalhazard.controller;
 import java.time.LocalDate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -19,7 +18,6 @@ import watch.nepalhazard.service.SentinelHubClient;
  */
 @RestController
 @RequestMapping("/satellite")
-@CrossOrigin(origins = "${app.cors.allowed-origin:http://localhost:5173}")
 public class SatelliteTestController {
 
     private static final double TSHO_ROLPA_LAT = 27.867;

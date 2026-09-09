@@ -2,7 +2,6 @@ package watch.nepalhazard.controller;
 
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -12,7 +11,6 @@ import watch.nepalhazard.repository.HazardEventRepository;
 
 @RestController
 @RequestMapping("/latest-earthquake")
-@CrossOrigin(origins = "${app.cors.allowed-origin:http://localhost:5173}")
 public class LatestEarthquakeController {
 
     private final HazardEventRepository hazardEventRepository;
