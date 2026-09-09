@@ -210,7 +210,7 @@
     <div class="kicker">Nepal Hazard Watch, methodology notes</div>
     <h1>How this app actually decides a lake is risky</h1>
     <p class="subtitle">A plain walkthrough of the scoring formula, where every input comes from, the assumptions built into it, what it cannot claim yet, and what could be built next.</p>
-    <div class="meta">Last updated September 8, 2026. Covers 97 glacial lakes and 123 glacier watch points across Nepal (220 monitored points total).</div>
+    <div class="meta">Last updated September 9, 2026. Covers 97 glacial lakes and 123 glacier watch points across Nepal (220 monitored points total).</div>
 </header>
 
 <p>A risk score with no explanation behind it is just a number to trust blindly, and that is not good enough for something people might actually act on. If a lake shows up under Watch on the dashboard, this page is where the reasoning lives: which real dataset fed into that decision, how old the data is allowed to be before it stops counting, and where the app is still guessing. Nothing here is written to sound more certain than the underlying data actually supports.</p>
@@ -386,6 +386,8 @@ score = 17 &times; earthquake_hazard<br>
 <tr><td>Saturation point</td><td class="num">50 pp</td><td>At or above this drop, hazard contribution is fully 1.0</td></tr>
 <tr><td>WATCH floor</td><td class="num">30 pp</td><td>Above this drop, forces a WATCH alert regardless of score (hand-chosen, not statistically derived)</td></tr>
 </table>
+
+<p>As of this writing (September 9, 2026), every monitored lake and glacier shows a satellite contribution of exactly 0. This is expected, not a bug: both factors went live on September 7, 2026, and the lake growth comparison specifically requires at least 20 days between two valid readings before it will compute a rate at all (see Table 4) - not enough time has passed yet for any lake to have one. The glacier ice-drop factor needs at least a second satellite pass since its September 7 baseline, which at Sentinel-2's ~5-day revisit cadence hadn't happened for any tracked glacier yet either at time of writing. Both factors should start producing real, non-zero values over the following weeks as more satellite passes accumulate.</p>
 
 <div class="chart-row">
 <div class="chart-card">

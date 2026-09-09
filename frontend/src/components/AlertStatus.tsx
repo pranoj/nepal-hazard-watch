@@ -128,17 +128,17 @@ function BasinGroup({ basin, points, townsByBasin, onSelect }: {
 
     return (
         <div style={{ padding: '0.3rem 0', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.6rem' }}>
-                <div style={{ fontWeight: 700, fontSize: '0.8rem', flexShrink: 0 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                <div style={{ fontWeight: 700, fontSize: '0.8rem' }}>
                     {basin} <span style={mutedText}>({points.length})</span>
                 </div>
                 {downstreamTowns && downstreamTowns.length > 0 && (
                     <div style={{
-                        ...mutedText, fontSize: '0.72rem', overflow: 'hidden',
-                        display: 'flex', alignItems: 'center', gap: '0.3rem', minWidth: 0,
+                        ...mutedText, fontSize: '0.72rem',
+                        display: 'flex', alignItems: 'flex-start', gap: '0.3rem',
                     }}>
-                        <Building2 size={12} strokeWidth={2} style={{ flexShrink: 0 }} />
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <Building2 size={12} strokeWidth={2} style={{ flexShrink: 0, marginTop: '0.15rem' }} />
+                        <span style={{ overflowWrap: 'break-word' }}>
                             {downstreamTowns.map(t => t.townName).join(' → ')}
                         </span>
                     </div>

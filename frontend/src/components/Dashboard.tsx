@@ -54,7 +54,7 @@ export function Dashboard() {
                 fontFamily: 'system-ui, -apple-system, sans-serif',
             }}
         >
-            <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '2rem 1.5rem 3rem' }}>
+            <div style={{ maxWidth: '1280px', margin: '0 auto', padding: isMobile ? '1.25rem 0.75rem 2rem' : '2rem 1.5rem 3rem' }}>
                 <header style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', marginBottom: '1.25rem', gap: '1rem', flexWrap: 'wrap' }}>
                     <div>
                         <h1 style={{ margin: 0, fontSize: '1.6rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

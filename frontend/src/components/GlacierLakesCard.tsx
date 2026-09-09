@@ -69,11 +69,8 @@ export function GlacierLakesCard({ risks }: GlacierLakesCardProps) {
 
     return (
         <div style={{ ...glassCardPad, marginTop: '1.5rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.9rem' }}>
-                <span style={{ fontWeight: 700, fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                    <Mountain size={19} strokeWidth={2} /> Notable Glacial Lakes
-                </span>
-                <span style={{ ...mutedText, fontSize: '0.75rem' }}>click a lake for Wikipedia</span>
+            <div style={{ fontWeight: 700, fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.9rem' }}>
+                <Mountain size={19} strokeWidth={2} /> Notable Glacial Lakes
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1.25rem' }}>
                 {order.map((lake) => {
