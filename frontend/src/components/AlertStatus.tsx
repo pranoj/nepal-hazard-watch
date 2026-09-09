@@ -191,7 +191,7 @@ export function AlertStatus({ onSelectRisk }: AlertStatusProps) {
 
     return (
         <div style={{ ...glassCard, padding: '0.85rem 1.25rem', borderLeft: `4px solid ${bannerColor}` }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
                 <AlertShapeIcon level={bannerLevel} size={22} />
                 <h2 style={{ margin: 0, fontSize: '1.05rem' }}>{headline}</h2>
                 <span style={{ ...mutedText, fontSize: '0.75rem' }}>· {risks.length} sites monitored</span>

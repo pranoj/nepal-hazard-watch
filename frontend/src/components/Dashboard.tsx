@@ -11,10 +11,12 @@ import { DataSourcesCard } from './DataSourcesCard';
 import { useGlofRiskMap } from '../api/useGlofRiskMap';
 import { BACKGROUND_IMAGE_URL, glassCardPad, mutedText } from '../utils/theme';
 import { findHighestRisk } from '../utils/risk';
+import { useIsMobile } from '../utils/useIsMobile';
 
 export function Dashboard() {
     const { risks } = useGlofRiskMap();
     const worst = findHighestRisk(risks);
+    const isMobile = useIsMobile();
     const [focusTarget, setFocusTarget] = useState<MapFocusTarget | null>(null);
     const mapCardRef = useRef<HTMLDivElement>(null);
     const focusClickCount = useRef(0);
@@ -92,9 +94,13 @@ export function Dashboard() {
                     </div>
                 </header>
 
-                {/* Grid keeps AlertStatus and the map in the same column width. */}
+                {/* Grid keeps AlertStatus and the map in the same column width.
+                    Below the mobile breakpoint it collapses to a single
+                    column so the sidebar's 260px minimum can't squeeze the
+                    map down to a sliver. */}
                 <div style={{
-                    display: 'grid', gridTemplateColumns: 'minmax(0, 3fr) minmax(260px, 1fr)',
+                    display: 'grid',
+                    gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'minmax(0, 3fr) minmax(260px, 1fr)',
                     gap: '1.5rem', marginBottom: '1.5rem',
                 }}>
                     <div style={{ gridColumn: '1 / 2', gridRow: '1' }}>
@@ -102,7 +108,7 @@ export function Dashboard() {
                     </div>
 
                     <div ref={mapCardRef} style={{ ...glassCardPad, gridColumn: '1 / 2', gridRow: '2' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                             <div style={{ fontWeight: 700, fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                 <MapIcon size={19} strokeWidth={2} /> Live Hazard Map
                             </div>
@@ -115,7 +121,8 @@ export function Dashboard() {
 
                     {/* Sidebar widgets all follow the same highest-risk point. */}
                     <div style={{
-                        gridColumn: '2 / 3', gridRow: '2',
+                        gridColumn: isMobile ? '1 / 2' : '2 / 3',
+                        gridRow: isMobile ? '3' : '2',
                         display: 'flex', flexDirection: 'column', gap: '1rem',
                     }}>
                         <ClockWeatherCard worst={worst} />

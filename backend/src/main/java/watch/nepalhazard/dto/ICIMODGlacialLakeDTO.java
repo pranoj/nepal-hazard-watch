@@ -123,12 +123,12 @@ public class ICIMODGlacialLakeDTO {
             return this.glacierName.trim() + " Glacier Lake";
         }
         if (isKnownName(this.riverBasin)) {
-            return "Unnamed Lake, " + this.riverBasin.trim() + " Basin";
+            return "Lake near " + this.riverBasin.trim();
         }
         if (isKnownName(this.province)) {
-            return "Unnamed Lake, " + this.province.trim();
+            return "Lake near " + this.province.trim();
         }
-        return "Unnamed Lake (" + icimodId + ")";
+        return "Lake (" + icimodId + ")";
     }
 
     private boolean isKnownName(String value) {

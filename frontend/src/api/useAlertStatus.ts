@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import api from './index';
 
 export interface EarthquakeInfo {
     id: number;
@@ -26,10 +27,8 @@ export function useAlertStatus() {
     useEffect(() => {
         const fetchAlertStatus = async () => {
             try {
-                const response = await fetch('http://localhost:8080/api/latest-earthquake/alert-status');
-                if (!response.ok) throw new Error('Failed to fetch alert status');
-                const data = await response.json();
-                setAlertStatus(data);
+                const response = await api.get<AlertStatusResponse>('/latest-earthquake/alert-status');
+                setAlertStatus(response.data);
                 setError(null);
             } catch (err) {
                 setError(err instanceof Error ? err.message : 'Unknown error');

@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { Satellite, Activity, CloudRain, Mountain, Snowflake, FileText } from 'lucide-react';
+import { Satellite, Activity, CloudRain, Mountain, Snowflake, FileText, Radar } from 'lucide-react';
 import { glassCardPad, mutedText, BACKGROUND_IMAGE_ATTRIBUTION } from '../utils/theme';
 
 interface DataSource {
@@ -21,6 +21,11 @@ const DATA_SOURCES: DataSource[] = [
         Icon: CloudRain, name: 'OpenWeatherMap', org: 'OpenWeather Ltd.',
         usage: 'Live temperature, humidity & rainfall readings',
         url: 'https://openweathermap.org/',
+    },
+    {
+        Icon: Radar, name: 'Copernicus Sentinel Hub', org: 'European Space Agency / Copernicus Data Space',
+        usage: 'Sentinel-2 satellite imagery for glacial lake growth & glacier ice-cover tracking',
+        url: 'https://dataspace.copernicus.eu/',
     },
     {
         Icon: Mountain, name: 'ICIMOD', org: 'Intl. Centre for Integrated Mountain Development',
