@@ -1,18 +1,17 @@
-import { CloudRain } from 'lucide-react';
+import { CloudRain, TriangleAlert } from 'lucide-react';
 import { useWeatherHistory } from '../api/useWeatherHistory';
 import { GlofRiskAssessment } from '../api/useGlofRiskMap';
 import { glassCardPad, mutedText } from '../utils/theme';
 
 interface RainfallTrendCardProps {
-    /** Follows the current highest-risk point, same as ClockWeatherCard. */
     worst: GlofRiskAssessment | null;
 }
 
-// no real river gauge feed - shows daily rainfall at the highest-risk point, bucketed from raw readings
+// no real river gauge feed - shows daily rainfall bucketed from raw weather readings
 export function RainfallTrendCard({ worst }: RainfallTrendCardProps) {
     const locationKey = worst?.icimodId ?? '348';
     const locationLabel = worst?.lakeName ?? 'Dig Tsho';
-    const { history, loading } = useWeatherHistory(locationKey, 7);
+    const { history, loading, error } = useWeatherHistory(locationKey, 7);
 
     const byDay = new Map<string, number>();
     for (const reading of history) {
@@ -31,10 +30,15 @@ export function RainfallTrendCard({ worst }: RainfallTrendCardProps) {
             </div>
             <div style={{ fontSize: '2rem', fontWeight: 700 }}>{latestTotal.toFixed(1)} mm</div>
             <div style={{ ...mutedText, fontSize: '0.8rem', marginBottom: '0.75rem', lineHeight: 1.4 }}>
-                Today, {locationLabel} (highest current risk)
+                Today, {locationLabel}
             </div>
             {loading && <div style={mutedText}>Loading...</div>}
-            {!loading && days.length === 0 && (
+            {!loading && error && days.length === 0 && (
+                <div style={{ fontSize: '0.85rem', color: '#f87171', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                    <TriangleAlert size={14} strokeWidth={2} /> Rainfall data unavailable right now
+                </div>
+            )}
+            {!loading && !error && days.length === 0 && (
                 <div style={mutedText}>
                     No real rainfall history yet - our weather pipeline only started collecting
                     data on Sept 3, 2026.

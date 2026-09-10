@@ -5,6 +5,7 @@ import { WeatherReading } from './useWeatherForLocation';
 export function useWeatherHistory(locationKey: string, days: number = 7) {
     const [history, setHistory] = useState<WeatherReading[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
@@ -17,9 +18,10 @@ export function useWeatherHistory(locationKey: string, days: number = 7) {
                 });
                 if (!cancelled && Array.isArray(response.data)) {
                     setHistory(response.data);
+                    setError(false);
                 }
             } catch {
-                // No real history yet for this point.
+                if (!cancelled) setError(true);
             } finally {
                 if (!cancelled) setLoading(false);
             }
@@ -33,5 +35,5 @@ export function useWeatherHistory(locationKey: string, days: number = 7) {
         };
     }, [locationKey, days]);
 
-    return { history, loading };
+    return { history, loading, error };
 }

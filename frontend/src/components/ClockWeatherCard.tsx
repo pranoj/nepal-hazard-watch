@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { Sun, Cloud, CloudRain, CloudDrizzle, CloudLightning, CloudSnow, CloudFog, CloudSun, MapPin } from 'lucide-react';
+import { Sun, Cloud, CloudRain, CloudDrizzle, CloudLightning, CloudSnow, CloudFog, CloudSun, MapPin, TriangleAlert } from 'lucide-react';
 import { useWeatherForLocation } from '../api/useWeatherForLocation';
 import { GlofRiskAssessment } from '../api/useGlofRiskMap';
 import { glassCardPad, mutedText } from '../utils/theme';
@@ -28,7 +28,6 @@ function formatNepalNow(date: Date): { time: string; day: string } {
 }
 
 interface ClockWeatherCardProps {
-    /** Weather follows the current highest-risk point, not a fixed lake. */
     worst: GlofRiskAssessment | null;
 }
 
@@ -37,7 +36,7 @@ export function ClockWeatherCard({ worst }: ClockWeatherCardProps) {
     // Dig Tsho is just the fallback before risk data has loaded.
     const locationKey = worst?.icimodId ?? '348';
     const locationLabel = worst?.lakeName ?? 'Dig Tsho';
-    const { weather } = useWeatherForLocation(locationKey);
+    const { weather, error } = useWeatherForLocation(locationKey);
 
     useEffect(() => {
         const interval = setInterval(() => setNow(new Date()), 30_000);
@@ -70,8 +69,13 @@ export function ClockWeatherCard({ worst }: ClockWeatherCardProps) {
             </div>
             <div style={{ ...mutedText, marginTop: '0.4rem', fontSize: '0.75rem', lineHeight: 1.4, display: 'flex', gap: '0.3rem' }}>
                 <MapPin size={13} strokeWidth={2} style={{ flexShrink: 0, marginTop: '0.1rem' }} />
-                <span>{locationLabel} · highest current risk</span>
+                <span>{locationLabel}</span>
             </div>
+            {error && !weather && (
+                <div style={{ marginTop: '0.4rem', fontSize: '0.72rem', color: '#f87171', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                    <TriangleAlert size={12} strokeWidth={2} /> Weather unavailable right now
+                </div>
+            )}
         </div>
     );
 }

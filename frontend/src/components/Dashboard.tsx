@@ -20,6 +20,8 @@ export function Dashboard() {
     const [focusTarget, setFocusTarget] = useState<MapFocusTarget | null>(null);
     const mapCardRef = useRef<HTMLDivElement>(null);
     const focusClickCount = useRef(0);
+    const selected = focusTarget?.riskId ? risks.find(r => r.id === focusTarget.riskId) : undefined;
+    const sidebarTarget = selected ?? worst;
 
     // fresh token each click (even re-clicking the same name) so the map's effect always re-fires
     function focusOnMap(riskId: number) {
@@ -118,8 +120,8 @@ export function Dashboard() {
                         gridRow: isMobile ? '3' : '2',
                         display: 'flex', flexDirection: 'column', gap: '1rem',
                     }}>
-                        <ClockWeatherCard worst={worst} />
-                        <RainfallTrendCard worst={worst} />
+                        <ClockWeatherCard worst={sidebarTarget} />
+                        <RainfallTrendCard worst={sidebarTarget} />
                         <SeismicActivityCard onSelectEvent={focusOnSeismicEvent} />
                     </div>
                 </div>

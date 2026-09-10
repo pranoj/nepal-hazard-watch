@@ -15,6 +15,7 @@ export interface WeatherReading {
 export function useWeatherForLocation(locationKey: string) {
     const [weather, setWeather] = useState<WeatherReading | null>(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
@@ -23,9 +24,10 @@ export function useWeatherForLocation(locationKey: string) {
                 const response = await api.get(`/weather/${locationKey}`);
                 if (!cancelled && response.data && response.data.temperature !== undefined) {
                     setWeather(response.data);
+                    setError(false);
                 }
             } catch {
-                // Real weather not available yet for this point - leave null.
+                if (!cancelled) setError(true);
             } finally {
                 if (!cancelled) setLoading(false);
             }
@@ -39,5 +41,5 @@ export function useWeatherForLocation(locationKey: string) {
         };
     }, [locationKey]);
 
-    return { weather, loading };
+    return { weather, loading, error };
 }
