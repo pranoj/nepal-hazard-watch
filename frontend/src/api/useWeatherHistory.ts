@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from './index';
 import { WeatherReading } from './useWeatherForLocation';
+import { jitter } from '../utils/jitter';
 
 export function useWeatherHistory(locationKey: string, days: number = 7) {
     const [history, setHistory] = useState<WeatherReading[]>([]);
@@ -28,7 +29,7 @@ export function useWeatherHistory(locationKey: string, days: number = 7) {
         };
 
         fetchHistory();
-        const interval = setInterval(fetchHistory, 10 * 60 * 1000);
+        const interval = setInterval(fetchHistory, jitter(10 * 60 * 1000));
         return () => {
             cancelled = true;
             clearInterval(interval);

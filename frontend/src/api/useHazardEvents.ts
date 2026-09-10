@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from './index';
+import { jitter } from '../utils/jitter';
 
 export interface HazardEvent {
     id: number;
@@ -30,7 +31,7 @@ export function useHazardEvents() {
         };
 
         fetchEvents();
-        const interval = setInterval(fetchEvents, 60_000);
+        const interval = setInterval(fetchEvents, jitter(60_000));
         return () => clearInterval(interval);
     }, []);
 

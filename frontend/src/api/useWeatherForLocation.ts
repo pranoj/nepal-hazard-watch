@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from './index';
+import { jitter } from '../utils/jitter';
 
 export interface WeatherReading {
     location: string;
@@ -34,7 +35,7 @@ export function useWeatherForLocation(locationKey: string) {
         };
 
         fetchWeather();
-        const interval = setInterval(fetchWeather, 5 * 60 * 1000);
+        const interval = setInterval(fetchWeather, jitter(5 * 60 * 1000));
         return () => {
             cancelled = true;
             clearInterval(interval);

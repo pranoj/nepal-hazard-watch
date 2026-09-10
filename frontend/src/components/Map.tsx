@@ -8,6 +8,7 @@ import { GlofRiskAssessment } from '../api/useGlofRiskMap';
 import { useDownstreamTowns } from '../api/useDownstreamTowns';
 import { useHazardEvents } from '../api/useHazardEvents';
 import { usePeaks } from '../api/usePeaks';
+import { useIsMobile } from '../utils/useIsMobile';
 import { alertDivIcon, alertZIndexOffset } from '../utils/alertVisuals';
 import { AlertShapeIcon } from './AlertShapeIcon';
 import { RiskDetailContent } from './RiskDetailContent';
@@ -115,6 +116,7 @@ export function Map({ glofRisks, focusTarget, onSelectRisk, onSelectPeak }: MapP
     const { townsByBasin } = useDownstreamTowns();
     const { events } = useHazardEvents();
     const { peaks } = usePeaks();
+    const isMobile = useIsMobile();
     const markerRefs = useRef<globalThis.Map<number, L.Marker>>(new globalThis.Map());
     const seismicMarkerRefs = useRef<globalThis.Map<number, L.Marker>>(new globalThis.Map());
     const peakMarkerRefs = useRef<globalThis.Map<string, L.Marker>>(new globalThis.Map());
@@ -140,7 +142,7 @@ export function Map({ glofRisks, focusTarget, onSelectRisk, onSelectPeak }: MapP
                     · <Mountain size={13} strokeWidth={2} /> Nepal's 16 highest peaks (informational, not risk-monitored)
                 </span>
             </div>
-            <MapContainer center={center} zoom={7} maxZoom={17} style={{ height: '500px', borderRadius: '8px' }}>
+            <MapContainer center={center} zoom={7} maxZoom={17} style={{ height: isMobile ? '320px' : '500px', borderRadius: '8px' }}>
                 {/* Sentinel-2 cloudless imagery (EOX); maxNativeZoom caps at real tile resolution (~10m), Leaflet upscales past that */}
                 <TileLayer
                     url="https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg"

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from './index';
+import { jitter } from '../utils/jitter';
 
 export interface GlofRiskAssessment {
     id: number;
@@ -50,7 +51,7 @@ export function useGlofRiskMap() {
         };
 
         fetchRisks();
-        const interval = setInterval(fetchRisks, 60000);
+        const interval = setInterval(fetchRisks, jitter(60000));
 
         return () => clearInterval(interval);
     }, []);

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from './index';
+import { jitter } from '../utils/jitter';
 
 export interface EarthquakeInfo {
     id: number;
@@ -39,7 +40,7 @@ export function useAlertStatus() {
         };
 
         fetchAlertStatus();
-        const interval = setInterval(fetchAlertStatus, 30000);
+        const interval = setInterval(fetchAlertStatus, jitter(30000));
 
         return () => clearInterval(interval);
     }, []);
