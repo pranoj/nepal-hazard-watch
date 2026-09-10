@@ -173,7 +173,7 @@ export function Map({ glofRisks, focusTarget, onSelectRisk, onSelectPeak }: MapP
                             zIndexOffset={alertZIndexOffset(risk.alertLevel, risk.riskScore)}
                             eventHandlers={{ click: () => onSelectRisk?.(risk.id) }}
                         >
-                            <Popup>
+                            <Popup maxWidth={260} maxHeight={isMobile ? 220 : 320}>
                                 <RiskDetailContent risk={risk} downstreamTowns={downstreamTowns} />
                             </Popup>
                         </Marker>
