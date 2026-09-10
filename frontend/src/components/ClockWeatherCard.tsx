@@ -29,9 +29,10 @@ function formatNepalNow(date: Date): { time: string; day: string } {
 
 interface ClockWeatherCardProps {
     worst: GlofRiskAssessment | null;
+    isSelected: boolean;
 }
 
-export function ClockWeatherCard({ worst }: ClockWeatherCardProps) {
+export function ClockWeatherCard({ worst, isSelected }: ClockWeatherCardProps) {
     const [now, setNow] = useState(new Date());
     // Dig Tsho is just the fallback before risk data has loaded.
     const locationKey = worst?.icimodId ?? '348';
@@ -69,7 +70,7 @@ export function ClockWeatherCard({ worst }: ClockWeatherCardProps) {
             </div>
             <div style={{ ...mutedText, marginTop: '0.4rem', fontSize: '0.75rem', lineHeight: 1.4, display: 'flex', gap: '0.3rem' }}>
                 <MapPin size={13} strokeWidth={2} style={{ flexShrink: 0, marginTop: '0.1rem' }} />
-                <span>{locationLabel}</span>
+                <span>{locationLabel} · {isSelected ? 'selected' : 'highest risk'}</span>
             </div>
             {error && !weather && (
                 <div style={{ marginTop: '0.4rem', fontSize: '0.72rem', color: '#f87171', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>

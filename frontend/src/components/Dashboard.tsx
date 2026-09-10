@@ -110,18 +110,18 @@ export function Dashboard() {
                             <RiskGaugeCard risks={risks} />
                         </div>
                         <div style={{ marginTop: '0.75rem' }}>
-                            <Map glofRisks={risks} focusTarget={focusTarget} />
+                            <Map glofRisks={risks} focusTarget={focusTarget} onSelectRisk={focusOnMap} />
                         </div>
                     </div>
 
-                    {/* Sidebar widgets all follow the same highest-risk point. */}
+                    {/* Sidebar widgets follow whatever lake/glacier was last selected, falling back to the highest-risk one. */}
                     <div style={{
                         gridColumn: isMobile ? '1 / 2' : '2 / 3',
                         gridRow: isMobile ? '3' : '2',
                         display: 'flex', flexDirection: 'column', gap: '1rem',
                     }}>
-                        <ClockWeatherCard worst={sidebarTarget} />
-                        <RainfallTrendCard worst={sidebarTarget} />
+                        <ClockWeatherCard worst={sidebarTarget} isSelected={!!selected} />
+                        <RainfallTrendCard worst={sidebarTarget} isSelected={!!selected} />
                         <SeismicActivityCard onSelectEvent={focusOnSeismicEvent} />
                     </div>
                 </div>

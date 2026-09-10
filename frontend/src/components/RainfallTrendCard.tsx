@@ -5,10 +5,11 @@ import { glassCardPad, mutedText } from '../utils/theme';
 
 interface RainfallTrendCardProps {
     worst: GlofRiskAssessment | null;
+    isSelected: boolean;
 }
 
 // no real river gauge feed - shows daily rainfall bucketed from raw weather readings
-export function RainfallTrendCard({ worst }: RainfallTrendCardProps) {
+export function RainfallTrendCard({ worst, isSelected }: RainfallTrendCardProps) {
     const locationKey = worst?.icimodId ?? '348';
     const locationLabel = worst?.lakeName ?? 'Dig Tsho';
     const { history, loading, error } = useWeatherHistory(locationKey, 7);
@@ -30,7 +31,7 @@ export function RainfallTrendCard({ worst }: RainfallTrendCardProps) {
             </div>
             <div style={{ fontSize: '2rem', fontWeight: 700 }}>{latestTotal.toFixed(1)} mm</div>
             <div style={{ ...mutedText, fontSize: '0.8rem', marginBottom: '0.75rem', lineHeight: 1.4 }}>
-                Today, {locationLabel}
+                Today, {locationLabel} ({isSelected ? 'selected' : 'highest risk'})
             </div>
             {loading && <div style={mutedText}>Loading...</div>}
             {!loading && error && days.length === 0 && (

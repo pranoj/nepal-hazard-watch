@@ -22,6 +22,7 @@ export interface MapFocusTarget {
 interface MapProps {
     glofRisks: GlofRiskAssessment[];
     focusTarget?: MapFocusTarget | null;
+    onSelectRisk?: (riskId: number) => void;
 }
 
 // lives inside MapContainer (useMap only works below it) - pans to the requested site and opens its real marker popup
@@ -86,7 +87,7 @@ function seismicDivIcon(sourceType: string | null): L.DivIcon {
     });
 }
 
-export function Map({ glofRisks, focusTarget }: MapProps) {
+export function Map({ glofRisks, focusTarget, onSelectRisk }: MapProps) {
     const center: [number, number] = [28.5, 85.5];
     const { townsByBasin } = useDownstreamTowns();
     const { events } = useHazardEvents();
@@ -140,6 +141,7 @@ export function Map({ glofRisks, focusTarget }: MapProps) {
                             position={[risk.latitude, risk.longitude]}
                             icon={alertDivIcon(risk.alertLevel, risk.riskScore)}
                             zIndexOffset={alertZIndexOffset(risk.alertLevel, risk.riskScore)}
+                            eventHandlers={{ click: () => onSelectRisk?.(risk.id) }}
                         >
                             <Popup>
                                 <RiskDetailContent risk={risk} downstreamTowns={downstreamTowns} />
