@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { Sun, Cloud, CloudRain, CloudDrizzle, CloudLightning, CloudSnow, CloudFog, CloudSun, MapPin, TriangleAlert } from 'lucide-react';
 import { useWeatherForLocation } from '../api/useWeatherForLocation';
-import { GlofRiskAssessment } from '../api/useGlofRiskMap';
 import { glassCardPad, mutedText } from '../utils/theme';
 
 const WEATHER_CONDITION_ICON: Record<string, { Icon: LucideIcon; color: string }> = {
@@ -28,15 +27,14 @@ function formatNepalNow(date: Date): { time: string; day: string } {
 }
 
 interface ClockWeatherCardProps {
-    worst: GlofRiskAssessment | null;
+    location: { key: string; label: string } | null;
     isSelected: boolean;
 }
 
-export function ClockWeatherCard({ worst, isSelected }: ClockWeatherCardProps) {
+export function ClockWeatherCard({ location, isSelected }: ClockWeatherCardProps) {
     const [now, setNow] = useState(new Date());
-    // Dig Tsho is just the fallback before risk data has loaded.
-    const locationKey = worst?.icimodId ?? '348';
-    const locationLabel = worst?.lakeName ?? 'Dig Tsho';
+    const locationKey = location?.key ?? '348';
+    const locationLabel = location?.label ?? 'Dig Tsho';
     const { weather, error } = useWeatherForLocation(locationKey);
 
     useEffect(() => {

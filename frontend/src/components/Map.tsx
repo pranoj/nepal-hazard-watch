@@ -3,34 +3,38 @@ import L from 'leaflet';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MapContainer, TileLayer, Popup, Marker, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Activity, TriangleAlert, MapPin, Clock } from 'lucide-react';
+import { Activity, TriangleAlert, MapPin, Clock, Mountain } from 'lucide-react';
 import { GlofRiskAssessment } from '../api/useGlofRiskMap';
 import { useDownstreamTowns } from '../api/useDownstreamTowns';
 import { useHazardEvents } from '../api/useHazardEvents';
+import { usePeaks } from '../api/usePeaks';
 import { alertDivIcon, alertZIndexOffset } from '../utils/alertVisuals';
 import { AlertShapeIcon } from './AlertShapeIcon';
 import { RiskDetailContent } from './RiskDetailContent';
 import { extractNearbyArea, formatNepalTime, formatTimeAgo, hoursAgo, minutesAgo } from '../utils/time';
 
-// `token` changes on every click so the focus effect always re-fires. Exactly one of riskId/seismic is set.
+// `token` changes on every click so the focus effect always re-fires. Exactly one of riskId/seismic/peak is set.
 export interface MapFocusTarget {
     token: number;
     riskId?: number;
     seismic?: { id: number; latitude: number; longitude: number };
+    peak?: { key: string; latitude: number; longitude: number };
 }
 
 interface MapProps {
     glofRisks: GlofRiskAssessment[];
     focusTarget?: MapFocusTarget | null;
     onSelectRisk?: (riskId: number) => void;
+    onSelectPeak?: (peakKey: string) => void;
 }
 
 // lives inside MapContainer (useMap only works below it) - pans to the requested site and opens its real marker popup
-function FocusHandler({ focusTarget, glofRisks, markerRefs, seismicMarkerRefs }: {
+function FocusHandler({ focusTarget, glofRisks, markerRefs, seismicMarkerRefs, peakMarkerRefs }: {
     focusTarget: MapFocusTarget | null | undefined;
     glofRisks: GlofRiskAssessment[];
     markerRefs: React.MutableRefObject<globalThis.Map<number, L.Marker>>;
     seismicMarkerRefs: React.MutableRefObject<globalThis.Map<number, L.Marker>>;
+    peakMarkerRefs: React.MutableRefObject<globalThis.Map<string, L.Marker>>;
 }) {
     const map = useMap();
 
@@ -41,6 +45,13 @@ function FocusHandler({ focusTarget, glofRisks, markerRefs, seismicMarkerRefs }:
             const { id, latitude, longitude } = focusTarget.seismic;
             map.flyTo([latitude, longitude], Math.max(map.getZoom(), 12), { duration: 0.8 });
             seismicMarkerRefs.current.get(id)?.openPopup();
+            return;
+        }
+
+        if (focusTarget.peak) {
+            const { key, latitude, longitude } = focusTarget.peak;
+            map.flyTo([latitude, longitude], Math.max(map.getZoom(), 12), { duration: 0.8 });
+            peakMarkerRefs.current.get(key)?.openPopup();
             return;
         }
 
@@ -87,12 +98,26 @@ function seismicDivIcon(sourceType: string | null): L.DivIcon {
     });
 }
 
-export function Map({ glofRisks, focusTarget, onSelectRisk }: MapProps) {
+const peakIcon = L.divIcon({
+    html: renderToStaticMarkup(
+        <div style={{ filter: 'drop-shadow(0 0 3px rgba(0,0,0,0.85))' }}>
+            <Mountain size={22} color="#e2e8f0" strokeWidth={2} />
+        </div>,
+    ),
+    className: '',
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+    popupAnchor: [0, -11],
+});
+
+export function Map({ glofRisks, focusTarget, onSelectRisk, onSelectPeak }: MapProps) {
     const center: [number, number] = [28.5, 85.5];
     const { townsByBasin } = useDownstreamTowns();
     const { events } = useHazardEvents();
+    const { peaks } = usePeaks();
     const markerRefs = useRef<globalThis.Map<number, L.Marker>>(new globalThis.Map());
     const seismicMarkerRefs = useRef<globalThis.Map<number, L.Marker>>(new globalThis.Map());
+    const peakMarkerRefs = useRef<globalThis.Map<string, L.Marker>>(new globalThis.Map());
 
     const recentSeismicEvents = events.filter(
         (e) => e.eventType === 'EARTHQUAKE' && hoursAgo(e.eventTime) < SEISMIC_MARKER_WINDOW_HOURS,
@@ -111,6 +136,9 @@ export function Map({ glofRisks, focusTarget, onSelectRisk }: MapProps) {
                 <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: 'rgba(244,246,248,0.7)' }}>
                     · <Activity size={13} strokeWidth={2} />/<TriangleAlert size={13} strokeWidth={2} color="#f97316" /> Seismic activity in the last 24h
                 </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: 'rgba(244,246,248,0.7)' }}>
+                    · <Mountain size={13} strokeWidth={2} /> Nepal's 16 highest peaks (informational, not risk-monitored)
+                </span>
             </div>
             <MapContainer center={center} zoom={7} maxZoom={17} style={{ height: '500px', borderRadius: '8px' }}>
                 {/* Sentinel-2 cloudless imagery (EOX); maxNativeZoom caps at real tile resolution (~10m), Leaflet upscales past that */}
@@ -127,7 +155,7 @@ export function Map({ glofRisks, focusTarget, onSelectRisk }: MapProps) {
                     maxZoom={17}
                 />
 
-                <FocusHandler focusTarget={focusTarget} glofRisks={glofRisks} markerRefs={markerRefs} seismicMarkerRefs={seismicMarkerRefs} />
+                <FocusHandler focusTarget={focusTarget} glofRisks={glofRisks} markerRefs={markerRefs} seismicMarkerRefs={seismicMarkerRefs} peakMarkerRefs={peakMarkerRefs} />
 
                 {glofRisks.map((risk) => {
                     const downstreamTowns = risk.riverBasin ? townsByBasin.get(risk.riverBasin) : undefined;
@@ -176,6 +204,26 @@ export function Map({ glofRisks, focusTarget, onSelectRisk }: MapProps) {
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                                 <Clock size={13} strokeWidth={2} /> {formatNepalTime(event.eventTime)} ({formatTimeAgo(minutesAgo(event.eventTime))})
                             </span>
+                        </Popup>
+                    </Marker>
+                ))}
+
+                {peaks.map((peak) => (
+                    <Marker
+                        key={peak.key}
+                        ref={(el) => {
+                            if (el) peakMarkerRefs.current.set(peak.key, el);
+                            else peakMarkerRefs.current.delete(peak.key);
+                        }}
+                        position={[peak.latitude, peak.longitude]}
+                        icon={peakIcon}
+                        eventHandlers={{ click: () => onSelectPeak?.(peak.key) }}
+                    >
+                        <Popup>
+                            <strong style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                <Mountain size={14} strokeWidth={2} /> {peak.name}
+                            </strong><br />
+                            {peak.elevationMeters.toLocaleString()} m
                         </Popup>
                     </Marker>
                 ))}

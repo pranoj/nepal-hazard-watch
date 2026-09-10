@@ -1,17 +1,16 @@
 import { CloudRain, TriangleAlert } from 'lucide-react';
 import { useWeatherHistory } from '../api/useWeatherHistory';
-import { GlofRiskAssessment } from '../api/useGlofRiskMap';
 import { glassCardPad, mutedText } from '../utils/theme';
 
 interface RainfallTrendCardProps {
-    worst: GlofRiskAssessment | null;
+    location: { key: string; label: string } | null;
     isSelected: boolean;
 }
 
 // no real river gauge feed - shows daily rainfall bucketed from raw weather readings
-export function RainfallTrendCard({ worst, isSelected }: RainfallTrendCardProps) {
-    const locationKey = worst?.icimodId ?? '348';
-    const locationLabel = worst?.lakeName ?? 'Dig Tsho';
+export function RainfallTrendCard({ location, isSelected }: RainfallTrendCardProps) {
+    const locationKey = location?.key ?? '348';
+    const locationLabel = location?.label ?? 'Dig Tsho';
     const { history, loading, error } = useWeatherHistory(locationKey, 7);
 
     const byDay = new Map<string, number>();

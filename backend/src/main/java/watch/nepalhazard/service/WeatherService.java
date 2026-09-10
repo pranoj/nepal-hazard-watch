@@ -9,6 +9,8 @@ import org.springframework.web.client.RestTemplate;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import watch.nepalhazard.config.NepalPeaks;
+import watch.nepalhazard.dto.Peak;
 import watch.nepalhazard.entity.GlacialLake;
 import watch.nepalhazard.entity.Glacier;
 import watch.nepalhazard.entity.Weather;
@@ -72,6 +74,14 @@ public class WeatherService {
         for (Glacier glacier : glaciers) {
             Weather weather = fetchWeatherForLocation(glacier.getRgiId(), glacier.getTerminusLatitude(),
                     glacier.getTerminusLongitude());
+            if (weather != null && !weatherExists(weather)) {
+                weatherRepository.save(weather);
+                count++;
+            }
+        }
+
+        for (Peak peak : NepalPeaks.ALL) {
+            Weather weather = fetchWeatherForLocation(peak.key(), peak.latitude(), peak.longitude());
             if (weather != null && !weatherExists(weather)) {
                 weatherRepository.save(weather);
                 count++;

@@ -9,19 +9,29 @@ import { RainfallTrendCard } from './RainfallTrendCard';
 import { GlacierLakesCard } from './GlacierLakesCard';
 import { DataSourcesCard } from './DataSourcesCard';
 import { useGlofRiskMap } from '../api/useGlofRiskMap';
+import { usePeaks } from '../api/usePeaks';
 import { BACKGROUND_IMAGE_URL, glassCardPad, mutedText } from '../utils/theme';
 import { findHighestRisk } from '../utils/risk';
 import { useIsMobile } from '../utils/useIsMobile';
 
 export function Dashboard() {
     const { risks } = useGlofRiskMap();
+    const { peaks } = usePeaks();
     const worst = findHighestRisk(risks);
     const isMobile = useIsMobile();
     const [focusTarget, setFocusTarget] = useState<MapFocusTarget | null>(null);
     const mapCardRef = useRef<HTMLDivElement>(null);
     const focusClickCount = useRef(0);
-    const selected = focusTarget?.riskId ? risks.find(r => r.id === focusTarget.riskId) : undefined;
-    const sidebarTarget = selected ?? worst;
+    const selectedRisk = focusTarget?.riskId ? risks.find(r => r.id === focusTarget.riskId) : undefined;
+    const selectedPeak = focusTarget?.peak ? peaks.find(p => p.key === focusTarget.peak!.key) : undefined;
+    const isSelected = !!selectedRisk || !!selectedPeak;
+    const sidebarTarget = selectedPeak
+        ? { key: selectedPeak.key, label: selectedPeak.name }
+        : selectedRisk
+            ? { key: selectedRisk.icimodId, label: selectedRisk.lakeName }
+            : worst
+                ? { key: worst.icimodId, label: worst.lakeName }
+                : null;
 
     // fresh token each click (even re-clicking the same name) so the map's effect always re-fires
     function focusOnMap(riskId: number) {
@@ -36,6 +46,17 @@ export function Dashboard() {
         setFocusTarget({
             token: focusClickCount.current,
             seismic: { id: event.id, latitude: event.latitude, longitude: event.longitude },
+        });
+        mapCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function focusOnPeak(peakKey: string) {
+        const peak = peaks.find(p => p.key === peakKey);
+        if (!peak) return;
+        focusClickCount.current += 1;
+        setFocusTarget({
+            token: focusClickCount.current,
+            peak: { key: peak.key, latitude: peak.latitude, longitude: peak.longitude },
         });
         mapCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
@@ -110,18 +131,18 @@ export function Dashboard() {
                             <RiskGaugeCard risks={risks} />
                         </div>
                         <div style={{ marginTop: '0.75rem' }}>
-                            <Map glofRisks={risks} focusTarget={focusTarget} onSelectRisk={focusOnMap} />
+                            <Map glofRisks={risks} focusTarget={focusTarget} onSelectRisk={focusOnMap} onSelectPeak={focusOnPeak} />
                         </div>
                     </div>
 
-                    {/* Sidebar widgets follow whatever lake/glacier was last selected, falling back to the highest-risk one. */}
+                    {/* Sidebar widgets follow whatever lake/glacier/peak was last selected, falling back to the highest-risk one. */}
                     <div style={{
                         gridColumn: isMobile ? '1 / 2' : '2 / 3',
                         gridRow: isMobile ? '3' : '2',
                         display: 'flex', flexDirection: 'column', gap: '1rem',
                     }}>
-                        <ClockWeatherCard worst={sidebarTarget} isSelected={!!selected} />
-                        <RainfallTrendCard worst={sidebarTarget} isSelected={!!selected} />
+                        <ClockWeatherCard location={sidebarTarget} isSelected={isSelected} />
+                        <RainfallTrendCard location={sidebarTarget} isSelected={isSelected} />
                         <SeismicActivityCard onSelectEvent={focusOnSeismicEvent} />
                     </div>
                 </div>
