@@ -6,7 +6,6 @@ import com.opencsv.exceptions.CsvException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import watch.nepalhazard.dto.ICIMODGlacialLakeDTO;
@@ -22,27 +21,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-/**
- * Service for integrating ICIMOD Glacial Lake data into the application
- * 
- * Data Source: ICIMOD (International Centre for Integrated Mountain
- * Development)
- * Database: HMAGLOFDB (Hindu-Kush Himalayan Glacial Lake Outburst Flood
- * Database)
- * License: CC BY 4.0 (Creative Commons Attribution 4.0 International)
- * 
- * IMPORTANT: Any use of this data must include proper attribution to ICIMOD
- * and comply with CC BY 4.0 licensing requirements.
- * 
- * Reference: https://www.icimod.org/
- * 
- * Responsibilities:
- * - Load ICIMOD CSV data from project resources
- * - Parse CSV into GlacialLake entities
- * - Filter for Nepal-specific data only
- * - Sync with database (avoid duplicates using icimodId)
- * - Run periodic refreshes on a schedule
- */
+/** Loads, parses, and syncs ICIMOD HMAGLOFDB glacial lake data (CC BY 4.0, https://www.icimod.org/), filtered to Nepal. */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -56,10 +35,6 @@ public class ICIMODGlacialLakeService {
     @Value("${icimod.sync.enabled:true}")
     private boolean syncEnabled;
 
-    /**
-     * Initialize ICIMOD data on application startup
-     * Loads glacial lakes from CSV if sync is enabled
-     */
     public void initializeICIMODData() {
         if (!syncEnabled) {
             log.info("ICIMOD sync disabled in configuration");
@@ -75,31 +50,23 @@ public class ICIMODGlacialLakeService {
         }
     }
 
-    /**
-     * Main synchronization method: Load, parse, and save ICIMOD glacial lake data
-     * Filters for Nepal only and avoids duplicate entries using icimodId
-     */
     @Transactional
     public void syncGlacialLakesFromICIMOD() {
         log.info("Starting ICIMOD glacial lake synchronization...");
 
         try {
-            // Step 1: Parse CSV into DTOs
             List<ICIMODGlacialLakeDTO> allLakes = parseICIMODCSV();
             log.info("Parsed {} total glacial lake records from ICIMOD CSV", allLakes.size());
 
-            // Step 2: Filter for Nepal only
             List<ICIMODGlacialLakeDTO> nepalLakes = filterForNepal(allLakes);
             log.info("Filtered to {} glacial lakes in Nepal", nepalLakes.size());
 
-            // Step 3: Validate and convert to entities
             List<GlacialLake> validLakes = nepalLakes.stream()
                     .filter(ICIMODGlacialLakeDTO::isValid)
                     .map(ICIMODGlacialLakeDTO::toEntity)
                     .collect(Collectors.toList());
             log.info("Validated {} lakes for database storage", validLakes.size());
 
-            // Step 4: Save or update each lake
             int saved = 0;
             int updated = 0;
             for (GlacialLake lake : validLakes) {
@@ -121,13 +88,6 @@ public class ICIMODGlacialLakeService {
         }
     }
 
-    /**
-     * Parse ICIMOD CSV file from classpath resources
-     * Uses OpenCSV's CsvToBeanBuilder for automatic column mapping
-     * 
-     * @return List of ICIMODGlacialLakeDTO objects parsed from CSV
-     * @throws IOException if CSV file cannot be read
-     */
     private List<ICIMODGlacialLakeDTO> parseICIMODCSV() throws IOException {
         log.debug("Loading ICIMOD CSV from: {}", csvResourcePath);
 
@@ -164,24 +124,13 @@ public class ICIMODGlacialLakeService {
         }
     }
 
-    // Nepal's rough bounding box - matches earthquake.nepal in application.yml.
-    // Used to admit transboundary lakes (e.g. in Tibet/China) that still
-    // drain into and flood Nepal directly, without pulling in unrelated
-    // transboundary lakes from other Himalayan border regions in the CSV.
+    // Nepal's rough bounding box (matches earthquake.nepal in application.yml) - admits transboundary lakes that drain into Nepal without pulling in unrelated border-region lakes.
     private static final double NEPAL_LAT_MIN = 26.0;
     private static final double NEPAL_LAT_MAX = 30.5;
     private static final double NEPAL_LON_MIN = 80.0;
     private static final double NEPAL_LON_MAX = 88.5;
 
-    /**
-     * Filter glacial lake records relevant to Nepal: lakes physically inside
-     * Nepal, plus lakes ICIMOD flags as transboundary that sit within
-     * Nepal's border envelope (e.g. the Aug 2026 Kyirong-Rasuwa GLOF
-     * originated from a Tibetan lake just across the border).
-     *
-     * @param allLakes All glacial lake records from ICIMOD database
-     * @return Filtered list of records relevant to Nepal's flood risk
-     */
+    /** Lakes physically in Nepal, plus ICIMOD-flagged transboundary lakes within Nepal's border envelope (e.g. the Aug 2026 Kyirong-Rasuwa GLOF originated across the border). */
     private List<ICIMODGlacialLakeDTO> filterForNepal(List<ICIMODGlacialLakeDTO> allLakes) {
         return allLakes.stream()
                 .filter(this::isRelevantToNepal)
@@ -206,24 +155,13 @@ public class ICIMODGlacialLakeService {
                 && lake.getLonLake() >= NEPAL_LON_MIN && lake.getLonLake() <= NEPAL_LON_MAX;
     }
 
-    /**
-     * Save a new glacial lake or update an existing one
-     * Uses icimodId as the unique identifier to prevent duplicates
-     * 
-     * @param lake GlacialLake entity to save or update
-     * @return true if new lake was created, false if updated existing
-     */
     @Transactional
     public boolean saveOrUpdateLake(GlacialLake lake) {
         try {
             Optional<GlacialLake> existing = glacialLakeRepository.findByIcimodId(lake.getIcimodId());
             boolean isNew = existing.isEmpty();
 
-            // Reuse the existing row's id (if any) so save() updates every
-            // field on the freshly-parsed lake in one shot, rather than
-            // manually copying each field one-by-one - a list that silently
-            // goes stale every time a new field is added (as happened with
-            // transboundary and riverBasin before this).
+            // reuses the existing row's id so save() overwrites every field - a manual copy-list went stale before (transboundary, riverBasin)
             existing.ifPresent(existingLake -> lake.setId(existingLake.getId()));
             lake.setLastUpdated(LocalDateTime.now());
             glacialLakeRepository.save(lake);
@@ -237,45 +175,7 @@ public class ICIMODGlacialLakeService {
         }
     }
 
-    /**
-     * Check if a glacial lake already exists in the database
-     * 
-     * @param icimodId ICIMOD unique identifier
-     * @return true if lake exists, false otherwise
-     */
-    public boolean lakeExists(String icimodId) {
-        return glacialLakeRepository.findByIcimodId(icimodId).isPresent();
-    }
-
-    /**
-     * Get count of glacial lakes in Nepal
-     * 
-     * @return Number of glacial lakes stored in database
-     */
     public long getNepalGlacialLakeCount() {
         return glacialLakeRepository.findAllLakesInNepal().size();
-    }
-
-    /**
-     * Periodic synchronization scheduled to run daily at 2:00 AM UTC
-     * Can be configured via application.properties: icimod.sync.cron
-     * 
-     * Commented out for initial setup - uncomment when ready for production:
-     * 
-     * @Scheduled(cron = "${icimod.sync.cron:0 0 2 * * *}")
-     */
-    // @Scheduled(cron = "${icimod.sync.cron:0 0 2 * * *}")
-    @Transactional
-    public void periodicICIMODSync() {
-        if (!syncEnabled) {
-            return;
-        }
-
-        log.info("Running scheduled ICIMOD synchronization...");
-        try {
-            syncGlacialLakesFromICIMOD();
-        } catch (Exception e) {
-            log.error("Scheduled ICIMOD sync failed: {}", e.getMessage(), e);
-        }
     }
 }

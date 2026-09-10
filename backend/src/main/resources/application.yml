@@ -1,8 +1,5 @@
 app:
-  # Read by CorsConfig. Defaults to the local dev frontend so nothing
-  # changes for local development; set APP_CORS_ORIGIN to the real deployed
-  # frontend origin(s) before going live - comma-separated if the frontend
-  # is reachable at more than one origin (e.g. bare domain + "www.").
+  # Read by CorsConfig. Set APP_CORS_ORIGIN before going live - comma-separated if more than one origin.
   cors:
     allowed-origins: ${APP_CORS_ORIGIN:http://localhost:5173}
 
@@ -40,12 +37,7 @@ spring:
     validateOnMigrate: false
     outOfOrder: true
 
-  # Spring's default @Scheduled executor is a single thread shared by every
-  # @Scheduled method in the app. If one job (weather/earthquake/risk-scan)
-  # ever stalls on a slow outbound call, that one thread gets tied up and
-  # every other scheduled job silently stops firing too, with no exception
-  # logged, until the app restarts. A small dedicated pool means one stuck
-  # job can no longer freeze the rest of the pipeline.
+  # dedicated pool - Spring's default @Scheduled executor is a single shared thread, so one stalled job silently freezes every other scheduled job
   task:
     scheduling:
       pool:
@@ -88,33 +80,15 @@ logging:
 
 earthquake:
   usgs:
-    # The pre-built GeoJSON summary feed, not the fdsnws query API - USGS's
-    # own docs recommend this for polling apps ("best performance and
-    # availability"), since it's a published file refreshed on a schedule
-    # rather than a live database query computed fresh per request. One
-    # request per poll (global, magnitude 2.5+) instead of three
-    # region-scoped query-API calls. "2.5" is the closest available bucket
-    # below our 4.0 floor (buckets are 1.0/2.5/4.5/significant) - filtering
-    # down to >=4.0 and to Nepal happens client-side in UsgsEarthquakeService,
-    # same as it always has for the Nepal bounding box. "_day" (not "_hour")
-    # gives a wider safety margin against any app downtime between polls;
-    # both are cached 60 seconds server-side either way, so there's no
-    # extra load from choosing the wider window.
+    # pre-built summary feed (USGS-recommended for polling), not the fdsnws query API; "2.5" is the closest bucket below our 4.0 floor, filtered client-side in UsgsEarthquakeService
     api-url: https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson
-    # USGS caches its feed responses for 60 seconds server-side - polling
-    # faster than that returns identical cached data, not fresher data.
-    # 1 minute matches that window exactly. A new landslide/earthquake found
-    # on any poll triggers an immediate risk rescan (see UsgsEarthquakeService
-    # / GlofRiskScanService) rather than waiting for the 30-min scan cycle.
+    # matches USGS's 60s server-side cache window; a new detection also triggers an immediate rescan rather than waiting for the 30-min cycle
     fetch-interval-ms: 60000
     min-magnitude: 4.0
     timeout-seconds: 30
     retry-attempts: 3
 
-  # Widened north of Nepal's actual border (26.0-30.4 lat) to also catch
-  # seismic activity (including landslide-type detections) just across the
-  # border in Tibet/China - glacier-fed rivers don't stop at the border,
-  # and the Aug 2026 Kyirong-Rasuwa GLOF originated from that side.
+  # widened north of Nepal's actual border to catch seismic activity in Tibet/China - the Aug 2026 Kyirong-Rasuwa GLOF originated from that side
   nepal:
     latitude-min: 26.0
     latitude-max: 31.5
@@ -145,9 +119,7 @@ terrain:
     api-url: ${ELEVATION_API_URL:https://api.open-elevation.com/api/v1/lookup}
     timeout-seconds: 15
 
-# Satellite lake/glacier tracking. See SentinelHubClient,
-# SatelliteLakeTrackingService, SatelliteGlacierTrackingService. Real credentials belong only in
-# application-local.yml (gitignored), never here.
+# real credentials belong only in application-local.yml (gitignored), never here
 satellite:
   sentinel-hub:
     client-id: ${SENTINEL_HUB_CLIENT_ID:}
@@ -155,23 +127,11 @@ satellite:
     token-url: https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token
     statistics-url: https://sh.dataspace.copernicus.eu/statistics/v1
     timeout-seconds: 20
-  # 5 days, matching Sentinel-2's real revisit cadence over Nepal - the
-  # service itself also skips any lake with a fresher-than-4-day reading,
-  # so restarting the app doesn't re-burn quota on unchanged imagery.
+  # 5 days, matching Sentinel-2's revisit cadence - the service also skips readings fresher than 4 days so restarts don't re-burn quota
   tracking-interval-ms: 432000000
   factor:
-    # Kill switch for the whole satellite contribution (both the weighted
-    # score term and the WATCH floor). Turned on 2026-09-07 as an MVP,
-    # calibrated against real Himalayan lake growth-rate data (see
-    # GLOFRiskCalculationService), not yet run through a full live season -
-    # intended to be reviewed after ~1 month of real observations.
+    # kill switch for the satellite lake-growth contribution; calibrated against real HKH data, MVP pending a full live season
     enabled: true
-  # Separate kill switch for the glacier ice/snow-cover sudden-drop factor
-  # (SatelliteGlacierTrackingService, assessSatelliteIceDrop). Kept distinct
-  # from satellite.factor above because this one is NOT backed by a
-  # published calibration dataset the way the lake growth threshold is -
-  # first-pass, physically-reasoned defaults only. Turned on 2026-09-07 per
-  # explicit request, with today as each glacier's baseline reading (no
-  # historical backfill - a collapse is a sudden event, not a slow trend).
+  # separate kill switch (glacier ice-drop) - unlike satellite.factor above, NOT backed by a published calibration dataset, first-pass defaults only
   glacier-factor:
     enabled: true

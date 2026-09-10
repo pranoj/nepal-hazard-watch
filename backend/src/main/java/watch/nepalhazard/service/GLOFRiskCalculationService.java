@@ -29,66 +29,32 @@ import watch.nepalhazard.repository.WeatherRepository;
 public class GLOFRiskCalculationService {
 
     private static final long EARTHQUAKE_LOOKBACK_DAYS = 30;
-    // Aftershocks decay roughly 1/time (Omori's law), so quake hazard fades
-    // exponentially with age instead of cutting off sharply at 30 days.
-    // Half-decay at 12 days: ~37% left at 12 days, ~8% at 30.
+    // Omori's law: aftershock hazard decays ~1/time; half-decay at 12 days (~8% left at 30).
     private static final double EARTHQUAKE_TIME_DECAY_DAYS = 12.0;
-    // Tighter than the earthquake radius/window on purpose - a landslide
-    // is localized, so the WATCH floor should only trigger for lakes
-    // actually near it, not everything within a loose national radius.
+    // Tighter than earthquake radius/window - landslides are localized, so the WATCH floor shouldn't fire nationally.
     private static final double LANDSLIDE_FLOOR_RADIUS_KM = 30.0;
     private static final long LANDSLIDE_FLOOR_LOOKBACK_DAYS = 7;
-    // A landslide stays in its own valley, so proximity alone isn't enough -
-    // also require the same river basin (nearest curated basin town) where
-    // that's resolvable. Doesn't apply to earthquakes, which aren't confined
-    // to a watershed.
+    // Also requires same river basin (nearest curated basin town) - a landslide stays in its own valley; doesn't apply to earthquakes.
     private static final double BASIN_MATCH_MAX_KM = 60.0;
     private static final double KM_PER_DEG_LAT = 111.32;
     private static final List<String> ALERT_ORDER = List.of("NORMAL", "WATCH", "DANGER", "EXTREME");
-    // Below this fraction of usable (non-cloud) pixels, a reading isn't
-    // trustworthy enough to base a growth comparison on either side of it.
+    // below this fraction of usable (non-cloud) pixels, a reading isn't trustworthy enough to compare
     private static final double SATELLITE_MIN_VALID_PIXEL_FRACTION = 0.30;
-    // A shorter gap makes the annualized rate below noisy (extrapolating a
-    // few days of measurement error out to a full year) - real satellite
-    // classification jitter needs enough elapsed time to average out.
+    // shorter gaps make the annualized rate noisy - classification jitter needs time to average out
     private static final long SATELLITE_MIN_COMPARISON_DAYS = 20;
-    // Calibrated against a real dataset (Rawlins, Watson et al. 2025, "Glacial
-    // Lake Observatory": 4,150 Himalayan/HKH lakes, Sentinel-2, 2017-2024,
-    // Zenodo doi:10.5281/zenodo.17802333), not guessed. Their own
-    // statistically-significant-growth lakes averaged ~2.7%/year (median
-    // 1.9%), reaching ~9%/year at the 90th percentile and ~18%/year at the
-    // extreme. Their non-significant (background noise) lakes topped out
-    // around 1.8-2.9%/year at the 90th percentile. So: below ~2%/year,
-    // relative growth is indistinguishable from ordinary measurement noise;
-    // above ~18%/year is about as dramatic as any real lake in that dataset
-    // got. The hazard term ramps smoothly between those two real reference
-    // points instead of a single hard cutoff.
+    // Calibrated against Rawlins, Watson et al. 2025 "Glacial Lake Observatory" (4,150 HKH lakes, Sentinel-2, 2017-2024,
+    // Zenodo doi:10.5281/zenodo.17802333): significant-growth lakes averaged ~2.7%/yr, ~9%/yr at p90, ~18%/yr at the extreme.
     private static final double SATELLITE_NOISE_FLOOR_PCT_PER_YEAR = 2.0;
     private static final double SATELLITE_HAZARD_SATURATION_PCT_PER_YEAR = 18.0;
-    // Separate, higher bar for the hard WATCH floor (not just contributing
-    // to the weighted score) - set near the real 90th-percentile rate among
-    // that dataset's statistically-significant lakes (~9%/year), so the
-    // floor only fires for growth that real data suggests is a genuine
-    // outlier, not merely "somewhat above average."
+    // Higher bar than the hazard saturation above - near the dataset's p90 significant-growth rate (~9%/yr), so the hard floor only fires on genuine outliers.
     private static final double SATELLITE_GROWTH_FLOOR_PCT_PER_YEAR = 8.0;
 
-    // --- Glacier ice/snow-cover sudden-drop thresholds ---
-    // Unlike the lake growth constants above, these are NOT backed by a
-    // published calibration dataset - no HKH-wide equivalent of the GLO
-    // dataset exists for short-window terminus ice-cover volatility. These
-    // are a physically-reasoned first pass (a real terminus collapse, e.g.
-    // Langtang Lirung Aug 2026, is a fast structural event measured in
-    // hours/days, not a gradual seasonal one) and should be treated as
-    // provisional MVP defaults pending real observation history, same as
-    // the lake threshold was before it got calibrated.
+    // Glacier ice/snow-cover sudden-drop thresholds: unlike the lake constants above, NOT backed by a published
+    // calibration dataset - physically-reasoned provisional MVP defaults pending real observation history.
     private static final double SATELLITE_ICE_MIN_VALID_PIXEL_FRACTION = 0.30;
-    // Caps how far apart the two compared readings can be - a drop spread
-    // over months is far more likely to be ordinary seasonal ablation than
-    // a sudden collapse, so only a short gap counts as "sudden" at all.
+    // caps how far apart compared readings can be - a slow multi-month drop is ordinary ablation, not a collapse
     private static final long SATELLITE_ICE_MAX_COMPARISON_DAYS = 15;
-    // Absolute percentage-point drop in the box's classified ice/snow
-    // fraction (not relative - termini often sit near zero already, where a
-    // relative-rate metric like the lake one breaks down).
+    // absolute pct-point drop, not relative - termini often sit near zero already, where a relative rate breaks down
     private static final double SATELLITE_ICE_NOISE_FLOOR_PCT_POINTS = 15.0;
     private static final double SATELLITE_ICE_HAZARD_SATURATION_PCT_POINTS = 50.0;
     private static final double SATELLITE_ICE_DROP_FLOOR_PCT_POINTS = 30.0;
@@ -118,20 +84,14 @@ public class GLOFRiskCalculationService {
         this.satelliteGlacierFactorEnabled = satelliteGlacierFactorEnabled;
     }
 
-    /**
-     * Risk assessment for a single lake: weather, ICIMOD lake type, season,
-     * and any recent nearby earthquake or landslide. A detected landslide
-     * or HEAVY rainfall also forces a minimum WATCH floor regardless of the
-     * weighted score.
-     */
+    /** Risk assessment for a lake. A detected landslide or HEAVY rainfall forces a minimum WATCH floor regardless of score. */
     public GlofRiskAssessment assessLake(GlacialLake lake) {
         RainfallAssessment rainfall = assessRainfall(lake.getIcimodId(), lake.getLatitude(), lake.getLongitude());
         double lakeTypeFactor = calculateLakeTypeFactor(lake.getRiskLevel());
         double seasonalModifier = calculateSeasonalModifier(LocalDateTime.now());
         boolean meltCondition = calculateMeltCondition(lake.getIcimodId(), lake.getLatitude(), lake.getLongitude());
         double massWeight = calculateMassWeight(lake.getSurfaceAreaKm2());
-        // No slope data for lakes, so the steep+wet pre-condition only
-        // applies to glaciers - see assessGlacier().
+        // no slope data for lakes - steep+wet pre-condition only applies to glaciers (see assessGlacier())
         boolean landslidePreCondition = false;
 
         EarthquakeInfluence eqInfluence = findStrongestNearbyEarthquake(lake.getLatitude(), lake.getLongitude());
@@ -141,11 +101,7 @@ public class GLOFRiskCalculationService {
         double landslideHazard = lsInfluence.hazard() * massWeight;
         SatelliteLakeGrowth satelliteGrowth = assessSatelliteLakeGrowth(lake.getIcimodId());
 
-        // When the satellite factor is off, these are exactly today's
-        // 20/25/25/20/10 weights and satelliteWeight is 0 - identical output
-        // to before this existed. When on, all five existing weights scale
-        // down proportionally (each x0.85) to make room for satellite at 15,
-        // rather than just adding 15 points on top of an already-100 scale.
+        // weights scale down x0.85 when satellite factor is on, to make room for it at 15, instead of exceeding 100
         double earthquakeWeight = satelliteFactorEnabled ? 17.0 : 20.0;
         double landslideWeight = satelliteFactorEnabled ? 21.25 : 25.0;
         double rainfallWeight = satelliteFactorEnabled ? 21.25 : 25.0;
@@ -196,8 +152,7 @@ public class GLOFRiskCalculationService {
         assessment.setSatelliteWaterFraction(satelliteGrowth.currentWaterFraction());
         assessment.setSatelliteLakeGrowthDetected(satelliteGrowth.growthDetected());
         assessment.setSatelliteComponent(satelliteGrowth.hazard());
-        // No glacier terminus box to measure for a lake row - always
-        // false/null, never a live ice-cover reading.
+        // no glacier terminus box to measure for a lake row
         assessment.setSatelliteIceFraction(null);
         assessment.setSatelliteIceSuddenDropDetected(false);
         assessment.setAssessedAt(LocalDateTime.now());
@@ -205,15 +160,9 @@ public class GLOFRiskCalculationService {
     }
 
     /**
-     * Compares the two most recent real Sentinel-2 water-fraction readings
-     * for this lake (see SatelliteLakeTrackingService), converts the change
-     * to an annualized relative rate, and grades it against real HKH-wide
-     * growth-rate statistics (see the SATELLITE_* constants above) rather
-     * than an arbitrary raw-percentage jump. No-growth whenever there's no
-     * prior reading, the gap is too short to annualize sensibly, the
-     * previous reading is too close to zero to divide by meaningfully, or
-     * either reading has too little valid (non-cloud) coverage to trust.
-     * Lakes only - glaciers have no lake to measure.
+     * Compares the two most recent Sentinel-2 water-fraction readings, converts to an annualized relative
+     * rate, and grades against the SATELLITE_* calibration constants above. No-growth if there's no prior
+     * reading, the gap is too short, the baseline is too near zero, or coverage is untrustworthy.
      */
     private SatelliteLakeGrowth assessSatelliteLakeGrowth(String icimodId) {
         if (icimodId == null) {
@@ -257,12 +206,7 @@ public class GLOFRiskCalculationService {
     private record SatelliteLakeGrowth(Double currentWaterFraction, double hazard, boolean growthDetected) {
     }
 
-    /**
-     * Risk assessment for a glacier watch point - a steep terminus near a
-     * river that can collapse and dam it directly, without an existing lake
-     * (Langtang Lirung, Aug 2026, is the real example). Same shape as
-     * assessLake(), with RGI slope replacing ICIMOD lake type.
-     */
+    /** Risk assessment for a glacier watch point - a steep terminus near a river that can collapse and dam it directly (e.g. Langtang Lirung, Aug 2026), without an existing lake. Same shape as assessLake(), with RGI slope replacing lake type. */
     public GlofRiskAssessment assessGlacier(Glacier glacier) {
         RainfallAssessment rainfall = assessRainfall(glacier.getRgiId(), glacier.getTerminusLatitude(),
                 glacier.getTerminusLongitude());
@@ -282,9 +226,7 @@ public class GLOFRiskCalculationService {
         double landslideHazard = lsInfluence.hazard() * massWeight;
         SatelliteIceDrop iceDrop = assessSatelliteIceDrop(glacier.getRgiId());
 
-        // Same shape as assessLake(): weights scale down x0.85 when the
-        // glacier satellite factor is on, to make room for a 15-point ice-
-        // drop term, and stay at today's 20/25/25/20/10 otherwise.
+        // same weight-scaling as assessLake(), for the 15-point ice-drop term
         double earthquakeWeight = satelliteGlacierFactorEnabled ? 17.0 : 20.0;
         double landslideWeight = satelliteGlacierFactorEnabled ? 21.25 : 25.0;
         double rainfallWeight = satelliteGlacierFactorEnabled ? 21.25 : 25.0;
@@ -335,8 +277,7 @@ public class GLOFRiskCalculationService {
         assessment.setMeltCondition(meltCondition);
         assessment.setNearestEarthquakeId(
                 lsInfluence.eventId() != null ? lsInfluence.eventId() : eqInfluence.earthquakeId());
-        // No lake to measure for a glacier watch point - always false/null,
-        // never a live satellite reading.
+        // no lake to measure for a glacier watch point
         assessment.setSatelliteLakeGrowthDetected(false);
         assessment.setSatelliteWaterFraction(null);
         assessment.setSatelliteIceFraction(iceDrop.currentIceFraction());
@@ -347,16 +288,9 @@ public class GLOFRiskCalculationService {
     }
 
     /**
-     * Compares the two most recent real Sentinel-2 ice/snow-cover readings
-     * for this glacier terminus (see SatelliteGlacierTrackingService) and
-     * flags a sharp, short-window drop as a possible sudden terminus
-     * collapse - as opposed to the lake growth comparison, this uses an
-     * absolute percentage-point drop (not a relative rate) and caps how far
-     * apart the readings can be, since a slow multi-week decline is far
-     * more likely to be ordinary seasonal melt than a real collapse.
-     * No-drop whenever there's no prior reading, the gap is too long to
-     * call "sudden", or either reading has too little valid (non-cloud)
-     * coverage to trust. Glaciers only - lakes have no terminus to measure.
+     * Compares the two most recent Sentinel-2 ice/snow-cover readings and flags a sharp, short-window drop as
+     * a possible terminus collapse. Uses an absolute pct-point drop (not relative) since termini often sit
+     * near zero already. No-drop if there's no prior reading, the gap is too long, or coverage is untrustworthy.
      */
     private SatelliteIceDrop assessSatelliteIceDrop(String rgiId) {
         if (rgiId == null) {
@@ -397,11 +331,7 @@ public class GLOFRiskCalculationService {
     private record SatelliteIceDrop(Double currentIceFraction, double hazard, boolean suddenDropDetected) {
     }
 
-    /**
-     * Scales earthquake/landslide hazard by the point's real area (bigger
-     * lake or glacier = more mass in motion under the same shaking).
-     * Ranges 0.5 (unknown/tiny) to 1.0 (10km2+).
-     */
+    /** Scales earthquake/landslide hazard by area (more mass in motion under the same shaking). Ranges 0.5 (unknown/tiny) to 1.0 (10km2+). */
     double calculateMassWeight(Double areaKm2) {
         if (areaKm2 == null || areaKm2 <= 0) {
             return 0.5;
@@ -409,11 +339,7 @@ public class GLOFRiskCalculationService {
         return Math.max(0.5, Math.min(1.0, 0.5 + (areaKm2 / 10.0) * 0.5));
     }
 
-    /**
-     * Steep terrain plus sustained heavy rain: a "conditions look dangerous
-     * right now" flag, ahead of any actual observed landslide. Only glaciers
-     * have slope data, so lakes always get false here.
-     */
+    /** Steep terrain plus heavy rain, ahead of any actual observed landslide. Lakes always get false (no slope data). */
     boolean calculateLandslidePreCondition(Double slopeDeg, String rainfallCondition) {
         if (slopeDeg == null) {
             return false;
@@ -444,12 +370,7 @@ public class GLOFRiskCalculationService {
         return Math.max(0, Math.min(1, hazard));
     }
 
-    /**
-     * Picks the last-30-days earthquake with the largest combined
-     * magnitude/distance/depth/age hazard for this point, not just the
-     * nearest or the strongest. Landslide-type detections are handled
-     * separately by findStrongestNearbyLandslide(), which has no time decay.
-     */
+    /** Largest combined magnitude/distance/depth/age hazard in the last 30 days - not just nearest or strongest. */
     private EarthquakeInfluence findStrongestNearbyEarthquake(double lakeLat, double lakeLon) {
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         LocalDateTime since = now.minusDays(EARTHQUAKE_LOOKBACK_DAYS);
@@ -480,12 +401,7 @@ public class GLOFRiskCalculationService {
         return new EarthquakeInfluence(bestHazard, bestId);
     }
 
-    /**
-     * Recent USGS "landslide"-type detections near this lake - a direct
-     * sighting of mass movement, not just shaking. Outside the scope check
-     * (30km, 7 days, same river basin where resolvable) it contributes
-     * exactly zero; inside it, hazard is graded the same way as earthquakes.
-     */
+    /** Recent USGS landslide detections. Outside the scope check (30km, 7 days, same basin) contributes zero. */
     private LandslideInfluence findStrongestNearbyLandslide(double lakeLat, double lakeLon, String ownBasin) {
         LocalDateTime floorSince = LocalDateTime.now(ZoneOffset.UTC).minusDays(LANDSLIDE_FLOOR_LOOKBACK_DAYS);
         List<HazardEvent> recentLandslides = hazardEventRepository.findRecentLandslides(floorSince);
@@ -524,13 +440,9 @@ public class GLOFRiskCalculationService {
     }
 
     /**
-     * True if the event's nearest point on a curated river course matches
-     * the lake's own basin. No real watershed polygons, so this is still a
-     * proxy, but a nearer one: each basin's curated towns are already
-     * ordered downstream, so we measure distance to the course connecting
-     * them, not just to the nearest single town. Falls back to true (don't
-     * restrict) when either side can't be resolved, so missing data never
-     * silently suppresses a real floor.
+     * True if the event's nearest point on a curated river course (basin towns connected in downstream order,
+     * not just nearest single town) matches the lake's basin. Falls back to true when unresolvable, so missing
+     * data never silently suppresses a real floor.
      */
     private boolean isSameBasin(String ownBasin, double eventLat, double eventLon) {
         if (ownBasin == null || ownBasin.isBlank()) {
@@ -578,12 +490,7 @@ public class GLOFRiskCalculationService {
         return Optional.of(nearestBasin);
     }
 
-    /**
-     * Shortest distance from a point to the line segment between two other
-     * points, approximating lat/lon as flat km using the query point's own
-     * latitude for the longitude scale factor - fine at the scale of one
-     * river segment, not meant to be survey-grade.
-     */
+    /** Point-to-segment distance, approximating lat/lon as flat km - fine at river-segment scale, not survey-grade. */
     private double pointToSegmentDistanceKm(double lat, double lon, double lat1, double lon1, double lat2,
             double lon2) {
         double kmPerDegLon = KM_PER_DEG_LAT * Math.cos(Math.toRadians(lat));
@@ -602,11 +509,7 @@ public class GLOFRiskCalculationService {
         return Math.sqrt(dx * dx + dy * dy);
     }
 
-    /**
-     * Rainfall hazard and condition (NORMAL/ELEVATED/HEAVY) for a location.
-     * Uses the location's own weather records when available, otherwise the
-     * nearest recorded weather point by coordinate.
-     */
+    /** Rainfall hazard/condition. Uses the location's own weather records, falling back to nearest by coordinate. */
     private RainfallAssessment assessRainfall(String preferredLocationKey, double lat, double lon) {
         Optional<Weather> latestWeather = Optional.empty();
         if (preferredLocationKey != null) {
@@ -629,9 +532,7 @@ public class GLOFRiskCalculationService {
         double rainfall7day = calculateRainfallSum(resolvedLocation, now.minusDays(7), now);
         double rainfall14day = calculateRainfallSum(resolvedLocation, now.minusDays(14), now);
 
-        // Sustained ground saturation over 1-2 weeks is its own hazard,
-        // independent of any single day's total, so it's scored separately
-        // rather than as a multiplier on dailyComponent.
+        // sustained saturation over 1-2 weeks is scored separately, not as a multiplier on dailyComponent
         double cumulative14Component = Math.max(0, Math.min(1, (rainfall14day - 200.0) / 200.0));
         double cumulative7Component = Math.max(0, Math.min(1, (rainfall7day - 100.0) / 150.0));
         double cumulativeComponent = Math.max(cumulative14Component, cumulative7Component);
@@ -645,10 +546,7 @@ public class GLOFRiskCalculationService {
             condition = "NORMAL";
         }
 
-        // Below freezing, precipitation falls as snow rather than
-        // melt-driving rain, so only dampen the same-day component with it.
-        // cumulativeComponent (ground saturation) stays temperature-
-        // independent, same for the reported HEAVY/ELEVATED condition.
+        // below freezing, precip falls as snow not rain - only dampens dailyComponent, not cumulative or condition
         double temperatureMeltMultiplier = weather.getTemperature() == null ? 1.0
                 : Math.max(0, Math.min(1, weather.getTemperature() / 15.0));
 
@@ -657,10 +555,7 @@ public class GLOFRiskCalculationService {
         return new RainfallAssessment(hazard, condition);
     }
 
-    /**
-     * Recent (3-day) average temperature above freezing - surfaced to the
-     * frontend as context, not weighted into the score.
-     */
+    /** 3-day average temperature above freezing - context only, not weighted into the score. */
     private boolean calculateMeltCondition(String locationKey, double lat, double lon) {
         LocalDateTime now = LocalDateTime.now();
         List<Weather> recent = weatherRepository.findWeatherHistory(locationKey, now.minusDays(3), now);
@@ -699,20 +594,12 @@ public class GLOFRiskCalculationService {
         return Math.max(0, Math.min(1, (slopeDeg - 20.0) / 50.0));
     }
 
-    /**
-     * Prefers the locally-computed terminus slope (real elevation samples
-     * near the actual failure zone) over RGI's whole-glacier mean, falling
-     * back to the RGI value whenever the local computation hasn't run yet
-     * or failed for that glacier.
-     */
+    /** Prefers the locally-computed terminus slope over RGI's whole-glacier mean; falls back to RGI if not yet computed. */
     private double effectiveSlopeDeg(Glacier glacier) {
         return glacier.getLocalSlopeDeg() != null ? glacier.getLocalSlopeDeg() : glacier.getSlopeDeg();
     }
 
-    /**
-     * Smooth monsoon-season curve peaking ~Jul 31, tapering to zero by
-     * ~May 1 and ~Oct 31, instead of a hard on/off month boundary.
-     */
+    /** Smooth monsoon-season curve peaking ~Jul 31, tapering to zero by ~May 1 and ~Oct 31. */
     double calculateSeasonalModifier(LocalDateTime dateTime) {
         int dayOfYear = dateTime.getDayOfYear();
         double peakDay = 212.0;
@@ -739,21 +626,6 @@ public class GLOFRiskCalculationService {
 
     private String escalate(String currentLevel, String floorLevel) {
         return ALERT_ORDER.indexOf(floorLevel) > ALERT_ORDER.indexOf(currentLevel) ? floorLevel : currentLevel;
-    }
-
-    public String getResponseAction(String alertLevel) {
-        switch (alertLevel) {
-            case "EXTREME":
-                return "EMERGENCY BROADCAST: Immediate evacuation of hazard zones. Activate emergency services.";
-            case "DANGER":
-                return "PUBLIC ALERT: Evacuate identified flood zones. Notify local authorities.";
-            case "WATCH":
-                return "ENHANCED MONITORING: Notify authorities, prepare evacuation plans, monitor situation closely.";
-            case "NORMAL":
-                return "Routine monitoring. No action required.";
-            default:
-                return "Unknown alert level.";
-        }
     }
 
     private double haversineDistance(

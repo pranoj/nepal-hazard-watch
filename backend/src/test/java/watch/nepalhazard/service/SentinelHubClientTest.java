@@ -5,11 +5,7 @@ import static org.assertj.core.api.Assertions.offset;
 
 import org.junit.jupiter.api.Test;
 
-/**
- * Tests the response-parsing logic against synthetic Statistics API
- * responses shaped like the real one confirmed via a live call to Tsho
- * Rolpa's real coordinates.
- */
+/** Synthetic Statistics API responses shaped like a real live call to Tsho Rolpa's coordinates. */
 class SentinelHubClientTest {
 
     private final SentinelHubClient client = new SentinelHubClient(20);
@@ -72,9 +68,7 @@ class SentinelHubClientTest {
 
         SentinelHubClient.LakeWaterReading reading = client.parseResponse(body);
 
-        // Most recent interval (Sept 1-6) is entirely cloud/no-data, so the
-        // parser should fall back to the older Aug 27-Sept 1 interval
-        // rather than reporting a false "no water" reading.
+        // Most recent interval is all cloud - falls back to the older valid interval instead of a false "no water" reading.
         assertThat(reading.intervalFrom()).isEqualTo("2026-08-27T00:00:00Z");
         assertThat(reading.validPixels()).isEqualTo(500);
     }

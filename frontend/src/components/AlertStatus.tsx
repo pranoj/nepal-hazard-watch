@@ -22,8 +22,7 @@ function dominantFactor(risk: GlofRiskAssessment): string {
     return factors[0][0];
 }
 
-// "1 Lake", "2 Glaciers", or "100 Lakes and 2 Glaciers" - names the actual
-// type(s) involved instead of the generic, GIS-jargon "point".
+// "1 Lake", "2 Glaciers", or "100 Lakes and 2 Glaciers" instead of generic GIS-jargon "point"
 function describeCounts(points: GlofRiskAssessment[]): string {
     const lakes = points.filter(p => p.sourceType !== 'GLACIER').length;
     const glaciers = points.filter(p => p.sourceType === 'GLACIER').length;
@@ -47,9 +46,7 @@ function groupByBasin(risks: GlofRiskAssessment[]): Array<[string, GlofRiskAsses
     return [...groups.entries()].sort((a, b) => b[1].length - a[1].length);
 }
 
-// Same click target style everywhere a lake/glacier name is shown as text
-// (not already inside a PointRow) - opens the same card clicking its point
-// on the map would show.
+// opens the same card clicking its point on the map would show
 function ClickableName({ risk, onSelect }: { risk: GlofRiskAssessment; onSelect: (risk: GlofRiskAssessment) => void }) {
     return (
         <span
@@ -91,14 +88,14 @@ function PointRow({ risk, onSelect }: { risk: GlofRiskAssessment; onSelect: (ris
     const flags = riskFlags(risk);
 
     return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.15rem 0', fontSize: '0.85rem' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', padding: '0.15rem 0', fontSize: '0.85rem' }}>
             <AlertShapeIcon level={risk.alertLevel} size={10} />
             <span style={{
-                overflow: 'hidden', flex: 1, minWidth: 0,
-                display: 'flex', alignItems: 'center', flexWrap: 'nowrap', gap: '0.35rem',
+                flex: 1, minWidth: 0,
+                display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.35rem',
             }}>
                 <TypeIcon size={13} strokeWidth={2} style={{ flexShrink: 0, color: 'rgba(244,246,248,0.75)' }} />
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{ overflowWrap: 'break-word' }}>
                     <strong><ClickableName risk={risk} onSelect={onSelect} /></strong>
                     <span style={mutedText}> · {dominantFactor(risk)}</span>
                 </span>
@@ -139,7 +136,7 @@ function BasinGroup({ basin, points, townsByBasin, onSelect }: {
                     }}>
                         <Building2 size={12} strokeWidth={2} style={{ flexShrink: 0, marginTop: '0.15rem' }} />
                         <span style={{ overflowWrap: 'break-word' }}>
-                            {downstreamTowns.map(t => t.townName).join(' → ')}
+                            <strong>Downstream:</strong> {downstreamTowns.map(t => t.townName).join(' → ')}
                         </span>
                     </div>
                 )}
@@ -169,9 +166,7 @@ export function AlertStatus({ onSelectRisk }: AlertStatusProps) {
         </div>
     );
 
-    // DANGER/EXTREME always means a real trigger (static factors alone cap
-    // at 30 points). WATCH needs splitting: only show it in the loud banner
-    // if it has an actual trigger, not just a static classification.
+    // DANGER/EXTREME always means a real trigger (static factors alone cap at 30) - WATCH needs splitting on hasActiveTrigger
     const critical = risks.filter(r => r.alertLevel === 'DANGER' || r.alertLevel === 'EXTREME');
     const watchTriggered = risks.filter(r => r.alertLevel === 'WATCH' && hasActiveTrigger(r));
     const watchBaseline = risks.filter(r => r.alertLevel === 'WATCH' && !hasActiveTrigger(r));

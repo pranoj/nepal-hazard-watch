@@ -20,18 +20,6 @@ export const mutedText: CSSProperties = {
     color: 'rgba(244, 246, 248, 0.65)',
 };
 
-export const pill: CSSProperties = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-    padding: '0.5rem 1rem',
-    borderRadius: '999px',
-    background: 'rgba(255, 255, 255, 0.08)',
-    border: '1px solid rgba(255, 255, 255, 0.14)',
-    color: '#f4f6f8',
-    fontSize: '0.9rem',
-};
-
 // Ama Dablam, Nepal - Wikimedia Commons, CC-licensed.
 export const BACKGROUND_IMAGE_URL =
     'https://upload.wikimedia.org/wikipedia/commons/c/cc/Ama_Dablam_under_a_Painted_Sky.jpg';

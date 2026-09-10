@@ -28,11 +28,8 @@ import watch.nepalhazard.repository.RiverBasinTownRepository;
 import watch.nepalhazard.repository.WeatherRepository;
 
 /**
- * Backtests the risk formula against real, documented historical GLOF
- * events in Nepal. Coordinates and ICIMOD risk classifications come from
- * the same dataset the app imports. Pre-2026 events have no real historical
- * weather (our pipeline started Sept 2026), so those cases use only
- * always-available signals: lake classification, coordinates, season.
+ * Backtests against real, documented Nepal GLOF events (ICIMOD data). Pre-2026 events use no weather
+ * (pipeline started Sept 2026) - only lake classification, coordinates, season.
  */
 @ExtendWith(MockitoExtension.class)
 class HistoricalGLOFBacktestTest {
@@ -60,12 +57,7 @@ class HistoricalGLOFBacktestTest {
                 lakeSatelliteObservationRepository, glacierSatelliteObservationRepository, false, false);
     }
 
-    /**
-     * Real, documented Nepal GLOF events with real coordinates and ICIMOD
-     * risk classifications, currently in our live glacial_lakes table:
-     * icimodId, lakeName, year, lat, lon, ICIMOD riskLevel, deaths (0 if
-     * none recorded).
-     */
+    /** Real Nepal GLOF events from the glacial_lakes table: icimodId, lakeName, year, lat, lon, riskLevel, deaths. */
     static List<Object[]> realHistoricalGlofLakes() {
         return List.of(
                 new Object[] { "348", "Dig Tsho", 1985, 27.874, 86.594, "High", 5 },
@@ -126,10 +118,7 @@ class HistoricalGLOFBacktestTest {
         assertThat(digTshoResult.getRiskScore()).isGreaterThan(nareResult.getRiskScore());
     }
 
-    /**
-     * The two real USGS landslide detections from Aug 26, 2026 near
-     * Langtang/Rasuwa, against a real glacier watch point in that valley.
-     */
+    /** The two real USGS landslide detections from Aug 26, 2026 near Langtang/Rasuwa, vs. a real glacier watch point there. */
     @Test
     void aug26_2026_langtangLandslide_triggersAlertOnRealNearbyGlacier() {
         Glacier langtangGlacier = Glacier.builder()
@@ -156,11 +145,7 @@ class HistoricalGLOFBacktestTest {
                 result.getRiskScore(), result.getAlertLevel(), result.getLandslideDetected());
     }
 
-    /**
-     * The real M5.2 landslide was detected at 2026-08-26T02:52:10Z (08:37
-     * NPT). Ten minutes earlier, no landslide/earthquake/rainfall signal
-     * existed yet - only season and terrain steepness were already true.
-     */
+    /** Real M5.2 landslide detected 2026-08-26T02:52:10Z (08:37 NPT); 10 min earlier, no landslide/rain signal existed yet. */
     @Test
     void tenMinutesBeforeTheRealLandslide_noSignalYetExisted_wouldNotHaveBeenFlagged() {
         LocalDateTime tenMinutesBefore = LocalDateTime.of(2026, 8, 26, 2, 42, 10); // UTC
@@ -180,10 +165,8 @@ class HistoricalGLOFBacktestTest {
     }
 
     /**
-     * "10 minutes before the flood" means before the flood reached the
-     * first settlement (Timure, ~08:50 NPT), not before the landslide's own
-     * detection (08:37 NPT). That puts it at 08:40 NPT - 3 minutes after
-     * the landslide was already seismically detectable.
+     * "10 min before the flood" = before Timure was hit (~08:50 NPT), not before detection (08:37 NPT) -
+     * i.e. 08:40 NPT, 3 minutes after detection.
      */
     @Test
     void tenMinutesBeforeFloodReachedFirstSettlement_landslideWasAlreadyDetected() {
@@ -193,9 +176,7 @@ class HistoricalGLOFBacktestTest {
                 .slopeDeg(48.48048).areaKm2(0.045344545812138)
                 .build();
 
-        // Detection was 2026-08-26T02:52:10Z (08:37 NPT); 08:40 NPT is 3
-        // minutes later. The landslide floor is a step function, so any
-        // small "minutes ago" reproduces the same detected hazard.
+        // Landslide floor is a step function - any small "minutes ago" gives the same detected hazard.
         HazardEvent landslideM52 = realLandslideEvent(6L, 5.2, 28.271, 85.515, 3);
         HazardEvent landslideM42 = realLandslideEvent(5L, 4.2, 28.27, 85.515, 3);
 
@@ -224,11 +205,8 @@ class HistoricalGLOFBacktestTest {
     }
 
     /**
-     * Real NASA POWER rainfall for this glacier's coordinates, Aug 13-26
-     * 2026 (14-day sum 286.3mm, 7-day sum 132.2mm - just under the
-     * ELEVATED/HEAVY cutoffs, so condition reads NORMAL, but the continuous
-     * cumulative hazard term still registers real risk). 08:20 NPT is 17
-     * minutes before the 08:37 NPT collapse - no landslide signal yet.
+     * Real NASA POWER rainfall Aug 13-26, 2026 (14-day 286.3mm, 7-day 132.2mm - just under ELEVATED/HEAVY,
+     * so NORMAL, though the cumulative term still shows risk). 08:20 NPT = 17 min before the 08:37 collapse.
      */
     @Test
     void aug26_820amNPT_beforeCollapse_realCumulativeRainfallOnly() {
@@ -264,11 +242,7 @@ class HistoricalGLOFBacktestTest {
         assertThat(historicallyAccurateScore).isGreaterThanOrEqualTo(25.0);
     }
 
-    /**
-     * Same rainfall, 25 minutes later at 08:45 NPT - 8 minutes after the
-     * collapse and 5 minutes before Timure was hit, so landslide detection
-     * now stacks on top of the same cumulative rainfall signal.
-     */
+    /** Same rainfall, 08:45 NPT (8 min after collapse, 5 min before Timure hit) - landslide detection now stacks on it. */
     @Test
     void aug26_845amNPT_afterCollapseBeforeSettlementHit_realRainfallPlusLandslide() {
         Glacier langtangGlacier = Glacier.builder()
@@ -305,16 +279,7 @@ class HistoricalGLOFBacktestTest {
         assertThat(historicallyAccurateScore).isGreaterThanOrEqualTo(25.0);
     }
 
-    /**
-     * A single consistent reconstruction of the real Aug 26 timeline, for
-     * the methodology page's timeline table/chart - unlike the isolated
-     * component tests above (each of which deliberately zeroes out one real
-     * signal to test the other alone), every point here uses the same real
-     * NASA POWER rainfall reading throughout, with only the landslide
-     * detection state changing at its real, correct elapsed time. This is
-     * what the formula would have actually shown in sequence, not four
-     * separate isolated claims stitched together.
-     */
+    /** Reconstructs the real Aug 26 timeline for the methodology page's chart, using the same real rainfall throughout with only the landslide state changing. */
     @Test
     void aug26_consistentTimeline_sameRealRainfallThroughout_onlyLandslideStateChanges() {
         Glacier langtangGlacier = Glacier.builder()
@@ -326,9 +291,7 @@ class HistoricalGLOFBacktestTest {
         when(hazardEventRepository.findRecentEarthquakes(any())).thenReturn(Collections.emptyList());
         when(hazardEventRepository.findRecentLandslides(any())).thenReturn(Collections.emptyList());
 
-        // Real NASA POWER rainfall, trailing 14 days as of Aug 19 (Aug 6-19)
-        // - one week before the collapse. No landslide signal yet, real
-        // rainfall only.
+        // Real NASA POWER rainfall, trailing 14 days as of Aug 19 (Aug 6-19) - one week before collapse.
         stubRealRainfall(langtangGlacier.getRgiId(), new double[] {
                 18.03, 27.24, 42.8, 12.77, 24.15, 8.78, 14.3,
                 13.63, 19.56, 29.71, 22.02, 16.38, 21.44, 31.35 }, 31.35);
@@ -374,12 +337,7 @@ class HistoricalGLOFBacktestTest {
                 16.87, 27.37, 11.95, 5.05, 18.39, 33.33, 19.28}, 19.28); // Aug 13-26, real NASA POWER data
     }
 
-    /**
-     * Stubs a real, trailing 14-day NASA POWER rainfall window ending on the
-     * "as of" day being tested - reusable for any point in the timeline, not
-     * just Aug 26 itself, so a week-before or day-before reconstruction uses
-     * its own correct real trailing window rather than Aug 26's.
-     */
+    /** Stubs a real 14-day NASA POWER rainfall window ending on the tested day - reusable for any timeline point. */
     private void stubRealRainfall(String locationKey, double[] fourteenDaysRealMm, double todayMm) {
         List<Weather> fourteenDayReadings = new java.util.ArrayList<>();
         for (double mm : fourteenDaysRealMm) {
@@ -416,12 +374,7 @@ class HistoricalGLOFBacktestTest {
         return weather;
     }
 
-    /**
-     * Hypothetical, not reconstructed history: plausible sustained monsoon
-     * rain on a real steep Langtang-valley glacier (RGI slope 48.48),
-     * testing whether the predictive pre-condition would have flagged this
-     * valley before any landslide was detected.
-     */
+    /** Hypothetical (not reconstructed) sustained monsoon rain on the real steep Langtang glacier (RGI slope 48.48), testing the predictive pre-condition. */
     @Test
     void hypotheticalMonsoonRain_wouldHaveFlaggedLangtangValleyBeforeTheLandslide() {
         Glacier langtangGlacier = Glacier.builder()
@@ -465,10 +418,7 @@ class HistoricalGLOFBacktestTest {
                 result.getRiskScore(), result.getAlertLevel(), result.getLandslidePreCondition());
     }
 
-    /**
-     * The 7-day/30km/basin landslide floor is a hard gate, not a decay - a
-     * landslide fully counts up to 7 days old, then drops to zero.
-     */
+    /** The 7-day/30km/basin landslide floor is a hard gate, not a decay - counts fully until 7 days old, then drops to zero. */
     @Test
     void landslideScore_isAStepFunctionOfElapsedTime_notAContinuousDecay() {
         Glacier langtangGlacier = Glacier.builder()

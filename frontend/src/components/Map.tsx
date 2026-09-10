@@ -12,11 +12,7 @@ import { AlertShapeIcon } from './AlertShapeIcon';
 import { RiskDetailContent } from './RiskDetailContent';
 import { extractNearbyArea, formatNepalTime, formatTimeAgo, hoursAgo, minutesAgo } from '../utils/time';
 
-// `token` changes on every click, even re-clicking the same site, so the
-// focus effect always re-fires instead of only reacting to riskId changes.
-// Exactly one of riskId/seismic is set - a lake/glacier focus looks up its
-// coordinates from glofRisks, a seismic focus already carries its own
-// coordinates (it isn't in glofRisks at all).
+// `token` changes on every click so the focus effect always re-fires. Exactly one of riskId/seismic is set.
 export interface MapFocusTarget {
     token: number;
     riskId?: number;
@@ -28,11 +24,7 @@ interface MapProps {
     focusTarget?: MapFocusTarget | null;
 }
 
-// Lives inside MapContainer (useMap only works below it) - pans to the
-// requested site and opens its real marker popup, the same one clicking it
-// directly on the map would open. Handles both a lake/glacier focus
-// (looked up from glofRisks) and a seismic event focus (coordinates already
-// known, since seismic events aren't part of glofRisks at all).
+// lives inside MapContainer (useMap only works below it) - pans to the requested site and opens its real marker popup
 function FocusHandler({ focusTarget, glofRisks, markerRefs, seismicMarkerRefs }: {
     focusTarget: MapFocusTarget | null | undefined;
     glofRisks: GlofRiskAssessment[];
@@ -68,16 +60,10 @@ const SEISMIC_MARKER_WINDOW_HOURS = 24;
 function seismicDivIcon(sourceType: string | null): L.DivIcon {
     const isLandslide = sourceType === 'landslide';
     const Icon = isLandslide ? TriangleAlert : Activity;
-    // Earthquake was near-invisible against the map at the old light gray
-    // (#e2e8f0) - red reads as an active hazard the way the landslide
-    // orange already does, and matches the "critical" red used elsewhere
-    // in the app (AlertStatus's EXTREME banner).
+    // earthquake was near-invisible at the old light gray (#e2e8f0) - red matches the "critical" red used elsewhere (EXTREME banner)
     const color = isLandslide ? '#f97316' : '#dc2626';
     const size = 34;
-    // Static "vibrating" look, not an actual animation: two blurred,
-    // offset copies of the icon sit behind a sharp one in front, the same
-    // trick a comic-panel motion blur uses, so it reads as tremor at a
-    // glance without anything actually moving.
+    // static "vibrating" look: two blurred offset copies behind a sharp one, comic-panel motion blur, nothing actually animates
     const svg = renderToStaticMarkup(
         <div style={{ position: 'relative', width: size + 8, height: size + 8 }}>
             <div style={{ position: 'absolute', top: -3, left: -3, opacity: 0.4, filter: 'blur(2px)' }}>
@@ -126,17 +112,14 @@ export function Map({ glofRisks, focusTarget }: MapProps) {
                 </span>
             </div>
             <MapContainer center={center} zoom={7} maxZoom={17} style={{ height: '500px', borderRadius: '8px' }}>
-                {/* Sentinel-2 cloudless satellite imagery (EOX), free, no API key.
-                    maxNativeZoom caps at real tile resolution (~10m); Leaflet
-                    upscales past that instead of requesting missing tiles. */}
+                {/* Sentinel-2 cloudless imagery (EOX); maxNativeZoom caps at real tile resolution (~10m), Leaflet upscales past that */}
                 <TileLayer
                     url="https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg"
                     attribution="Sentinel-2 cloudless by <a href=&quot;https://s2maps.eu&quot;>EOX IT Services GmbH</a> (Contains modified Copernicus Sentinel data)"
                     maxNativeZoom={14}
                     maxZoom={17}
                 />
-                {/* Transparent overlay: city/place labels and borders, so
-                    zooming in reveals real place names over the imagery. */}
+                {/* transparent overlay: place labels/borders over the imagery */}
                 <TileLayer
                     url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
                     attribution="Labels &copy; <a href=&quot;https://www.esri.com/&quot;>Esri</a>"

@@ -1,6 +1,4 @@
-// Backend stores eventTime as UTC but serializes it without a "Z" suffix -
-// without this, `new Date(...)` would parse it as the browser's own local
-// time instead of UTC.
+// backend serializes UTC without a "Z" suffix - without this, `new Date(...)` would parse it as browser-local time
 export function parseUtcEventTime(isoLocal: string): Date {
     return new Date(isoLocal.endsWith('Z') ? isoLocal : `${isoLocal}Z`);
 }

@@ -13,13 +13,7 @@ import watch.nepalhazard.repository.GlacialLakeRepository;
 import watch.nepalhazard.repository.GlacierRepository;
 import watch.nepalhazard.repository.GlofRiskAssessmentRepository;
 
-/**
- * Periodically recomputes GLOF risk for every known Nepal glacial lake
- * ("Type A") and glacier watch point ("Type B"), persisting the latest
- * assessment for each, so the frontend map always has a current risk
- * reading for the whole country rather than only points a user asks about
- * on demand.
- */
+/** Periodically recomputes GLOF risk for every lake ("Type A") and glacier watch point ("Type B"), so the map always has a current reading rather than computing on demand. */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -76,10 +70,7 @@ public class GlofRiskScanService {
         log.info("Glacier risk scan complete: {} assessed, {} above NORMAL", glaciers.size(), aboveNormal);
     }
 
-    // Reuses the existing row's id (if any) so save() updates every field on
-    // the freshly-computed assessment in one shot, rather than manually
-    // copying each field one-by-one - a list that silently goes stale every
-    // time a new field is added to GlofRiskAssessment (as happened before).
+    // reuses the existing row's id so save() overwrites every field in one shot, rather than a copy-list that goes stale when a field is added
     private void saveOrUpdate(GlofRiskAssessment assessment, Optional<GlofRiskAssessment> existing) {
         existing.ifPresent(e -> assessment.setId(e.getId()));
         glofRiskAssessmentRepository.save(assessment);

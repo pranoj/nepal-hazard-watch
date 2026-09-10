@@ -5,13 +5,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-/**
- * Single source of truth for allowed frontend origins, replacing the
- * per-controller @CrossOrigin annotations. Needed because the frontend is
- * reachable at more than one real origin (the bare domain and "www."), and
- * @CrossOrigin's origins attribute doesn't split a comma-separated property
- * value into multiple allowed origins.
- */
+/** Single source of truth for allowed origins - @CrossOrigin's origins attribute can't split a comma-separated property into multiple origins. */
 @Configuration
 public class CorsConfig implements WebMvcConfigurer {
 

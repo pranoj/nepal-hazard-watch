@@ -3,20 +3,12 @@ import { GlofRiskAssessment } from '../api/useGlofRiskMap';
 
 type AlertLevel = GlofRiskAssessment['alertLevel'];
 
-// Shape as well as color, so levels stay distinguishable at small marker
-// sizes and for color-blind users: dot up through a star for EXTREME.
+// shape as well as color, so levels stay distinguishable at small sizes and for color-blind users
 export const ALERT_COLORS: Record<AlertLevel, string> = {
     NORMAL: '#16a34a',
     WATCH: '#eab308',
     DANGER: '#ea580c',
     EXTREME: '#dc2626',
-};
-
-export const ALERT_SHAPE_NAMES: Record<AlertLevel, string> = {
-    NORMAL: 'circle',
-    WATCH: 'triangle',
-    DANGER: 'diamond',
-    EXTREME: 'star',
 };
 
 function starPoints(cx: number, cy: number, outerR: number, innerR: number, points: number): string {
@@ -29,8 +21,7 @@ function starPoints(cx: number, cy: number, outerR: number, innerR: number, poin
     return coords.join(' ');
 }
 
-// Shared shape geometry (0-20 viewBox) so the map icon and the small list
-// dot render the exact same silhouette, just at different sizes.
+// shared 0-20 viewBox so the map icon and the small list dot render the exact same silhouette
 export function alertShapeInnerSvg(level: AlertLevel, color: string): string {
     switch (level) {
         case 'NORMAL':
@@ -48,10 +39,7 @@ export function alertShapeSvgMarkup(level: AlertLevel, color: string, size: numb
     return `<svg width="${size}" height="${size}" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">${alertShapeInnerSvg(level, color)}</svg>`;
 }
 
-// Leaflet stacks markers by screen position by default, not severity, so a
-// NORMAL marker could bury a DANGER one when zoomed out. This forces
-// severity to always win (the 1000-point gap between levels is bigger than
-// the 0-100 score tiebreak within one).
+// Leaflet stacks markers by screen position, not severity - this forces severity to always win (1000-pt gap beats the 0-100 tiebreak)
 const ALERT_Z_BASE: Record<AlertLevel, number> = {
     NORMAL: 0,
     WATCH: 1000,

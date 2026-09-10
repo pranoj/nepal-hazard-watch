@@ -14,15 +14,7 @@ import watch.nepalhazard.entity.GlacierSatelliteObservation;
 import watch.nepalhazard.repository.GlacierRepository;
 import watch.nepalhazard.repository.GlacierSatelliteObservationRepository;
 
-/**
- * Collects a real Sentinel-2 NDSI ice/snow-cover reading for every glacier
- * watch point, on the same cadence as SatelliteLakeTrackingService.
- * Deliberately no historical backfill - unlike lake growth (a slow,
- * multi-year trend worth comparing against an older archive reading), a
- * terminus collapse is a sudden event. Today's first real reading is the
- * baseline; every reading after that gets compared against the one before
- * it for a sudden-drop check in GLOFRiskCalculationService.
- */
+/** Sentinel-2 NDSI ice/snow-cover reading per glacier. No historical backfill - unlike lake growth, a terminus collapse is sudden, so today's first reading is the baseline. */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -31,9 +23,7 @@ public class SatelliteGlacierTrackingService {
     private static final double AOI_HALF_WIDTH_DEG = 0.012;
     private static final int LOOKBACK_DAYS = 10;
     private static final int MIN_REFRESH_INTERVAL_DAYS = 4;
-    // Same rate-limit headroom as SatelliteLakeTrackingService - real
-    // observed 429s during that job's testing were tighter than the
-    // documented 300/min.
+    // Same headroom as SatelliteLakeTrackingService - observed 429s were tighter than the documented 300/min.
     private static final long REQUEST_DELAY_MS = 3000;
 
     private final GlacierRepository glacierRepository;

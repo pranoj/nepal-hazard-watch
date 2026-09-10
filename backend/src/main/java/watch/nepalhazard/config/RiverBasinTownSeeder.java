@@ -8,22 +8,10 @@ import watch.nepalhazard.entity.RiverBasinTown;
 import watch.nepalhazard.repository.RiverBasinTownRepository;
 
 /**
- * Seeds a curated river-basin -> downstream-towns reference table (see
- * V12__create_river_basin_towns_table.sql). This is a static lookup, not
- * computed GIS flow-routing (that's deferred - see project roadmap), built
- * from general Nepal river geography and cross-checked against the actual
- * coordinates of the glacial lakes tagged to each basin.
- *
- * Deliberately NOT covering every basin present in glacial_lakes:
- * - "Maquan" (China) sits at ~30.3N/82.2E, matching the Yarlung
- * Tsangpo/Brahmaputra headwater near Mt. Kailash - it very likely drains
- * away from Nepal entirely, not toward it. Included in the source data by
- * the rough lat/lon border-envelope filter, not a real Nepal-relevant
- * basin.
- * - "Kutiyangti" (India), "Kali", and "Kawari" (Nepal, far-west border
- * area) could not be confidently matched to a specific known river course
- * and downstream towns without risking conflating two different real
- * rivers of similar name - left unmapped rather than guessed.
+ * Static curated river-basin -> downstream-towns lookup (see V12__create_river_basin_towns_table.sql), not
+ * computed GIS flow-routing. Deliberately doesn't cover every basin in glacial_lakes: "Maquan" likely drains
+ * away from Nepal (Yarlung Tsangpo headwater, included only by the source data's border-envelope filter);
+ * "Kutiyangti"/"Kali"/"Kawari" left unmapped - couldn't be confidently matched without conflating rivers of similar name.
  */
 @Configuration
 public class RiverBasinTownSeeder {
@@ -86,8 +74,7 @@ public class RiverBasinTownSeeder {
                     town("Seti", "Pokhara", 28.2096, 83.9856, 1),
                     town("Seti", "Damauli (Tanahun)", 27.9833, 84.2833, 2),
 
-                    // Indrawati (Melamchi/Sindhupalchok) -> joins Sun Koshi
-                    // Melamchi is the site of the real, well-documented June 2021 GLOF/debris flood
+                    // Indrawati (Melamchi/Sindhupalchok) -> joins Sun Koshi; site of the June 2021 GLOF/debris flood
                     town("Indrawati", "Melamchi", 27.8333, 85.5500, 1),
                     town("Indrawati", "Dolalghat (confluence)", 27.6833, 85.6667, 2),
 
@@ -108,12 +95,8 @@ public class RiverBasinTownSeeder {
                     town("Poiqu", "Lamosangu", 27.6667, 85.9000, 3),
                     town("Poiqu", "Dolalghat (confluence)", 27.6833, 85.6667, 4),
 
-                    // Gyirong (Kyirong, Tibet) becomes Trishuli in Nepal via Rasuwa -
-                    // the actual corridor of the Aug 2026 Kyirong-Rasuwa flood.
-                    // Langtang Village/Kyanjin Gompa (the Langtang Khola/Lhende Khola
-                    // sub-valley) are included upstream of the main Rasuwa road towns -
-                    // the actual source valley of that flood, initially missed when
-                    // this list only covered the main Kyirong border road corridor.
+                    // Gyirong (Kyirong, Tibet) becomes Trishuli via Rasuwa - corridor of the Aug 2026 flood;
+                    // Langtang Village/Kyanjin Gompa (the actual source sub-valley) included upstream of the main road towns.
                     town("Gyirong", "Langtang Village", 28.212, 85.615, 1),
                     town("Gyirong", "Kyanjin Gompa", 28.212, 85.680, 2),
                     town("Gyirong", "Syabrubesi (Rasuwa)", 28.1667, 85.3333, 3),

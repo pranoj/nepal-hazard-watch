@@ -145,11 +145,7 @@ class GLOFRiskCalculationServiceTest {
         assertThat(warmResult.getRainfallComponent()).isGreaterThan(coldResult.getRainfallComponent());
     }
 
-    /**
-     * 14 days of moderate rain (22mm/day, each below the 25mm/24h floor)
-     * sums to 308mm, over the 300mm HEAVY threshold. Cumulative rainfall
-     * must score independently of the single-day component.
-     */
+    /** 14 x 22mm/day = 308mm (over the 300mm HEAVY threshold), though no single day clears the 25mm floor. */
     @Test
     void sustainedCumulativeRain_scoresHazardEvenWhenTodayAloneIsBelowThreshold() {
         GlacialLake lake = GlacialLake.builder()
@@ -175,17 +171,12 @@ class GLOFRiskCalculationServiceTest {
 
         GlofRiskAssessment result = service.assessLake(lake);
 
-        // 14-day sum = 308mm (>300 HEAVY threshold), but today's own 22mm
-        // never clears the 25mm daily floor - this is exactly the real
-        // Aug 26 shape (300.6mm/14-day, 19.28mm that specific day).
+        // Mirrors the real Aug 26 event: 300.6mm/14-day, 19.28mm that day.
         assertThat(result.getRainfallCondition()).isEqualTo("HEAVY");
         assertThat(result.getRainfallComponent()).isGreaterThan(0.3);
     }
 
-    /**
-     * The temperature multiplier should only dampen the same-day rainfall
-     * component, not the multi-week cumulative saturation signal.
-     */
+    /** Temperature multiplier dampens only today's rainfall, not the cumulative signal. */
     @Test
     void sustainedCumulativeRain_notErasedByColdTemperatureToday() {
         GlacialLake lake = GlacialLake.builder()
@@ -277,9 +268,7 @@ class GLOFRiskCalculationServiceTest {
         GlofRiskAssessment twelveDayResult = assessWithQuakeAge(glacier, 12);
         GlofRiskAssessment thirtyDayResult = assessWithQuakeAge(glacier, 30);
 
-        // Same quake, same distance/depth/magnitude - only age differs, so
-        // any difference in the score is purely the new time-decay term.
-        // 12-day decay constant: exp(-12/12) ~= 0.368, exp(-30/12) ~= 0.082.
+        // Only age differs. Decay: exp(-12/12) ~= 0.368, exp(-30/12) ~= 0.082.
         assertThat(twelveDayResult.getEarthquakeComponent())
                 .isCloseTo(freshResult.getEarthquakeComponent() * 0.368, offset(0.01));
         assertThat(thirtyDayResult.getEarthquakeComponent())
@@ -393,11 +382,7 @@ class GLOFRiskCalculationServiceTest {
         GlofRiskAssessment onCourseResult = service.assessGlacier(onBasinACourse);
         GlofRiskAssessment otherBasinResult = service.assessGlacier(taggedOtherBasin);
 
-        // The event genuinely sits on BasinA's river course, so a glacier
-        // tagged BasinA should get the floor even though neither of BasinA's
-        // own towns is individually close - and a glacier tagged BasinB
-        // should not, even though a single BasinB town happens to be nearer
-        // in plain point-distance than BasinA's own endpoints are.
+        // BasinA glacier gets the floor via river-course match; BasinB doesn't, despite closer plain-distance.
         assertThat(onCourseResult.getLandslideDetected()).isTrue();
         assertThat(otherBasinResult.getLandslideDetected()).isFalse();
     }
@@ -444,9 +429,7 @@ class GLOFRiskCalculationServiceTest {
     void satelliteGrowth_ignoresALowConfidenceJumpEvenIfLarge() {
         GlacialLake lake = testLake();
         stubNoTriggers();
-        // Water fraction jumped from 0.10 to 0.60 over a real 60-day gap,
-        // but neither reading has enough valid (non-cloud) coverage to
-        // trust that jump.
+        // Big jump (0.10 -> 0.60), but both readings have too little valid coverage to trust it.
         when(lakeSatelliteObservationRepository.findTop2ByIcimodIdOrderByObservedAtDesc("TEST-LAKE"))
                 .thenReturn(List.of(
                         reading(0.60, 0.15, LocalDateTime.now()),
@@ -461,9 +444,7 @@ class GLOFRiskCalculationServiceTest {
     void satelliteGrowth_ignoresAComparisonWindowThatIsTooShort() {
         GlacialLake lake = testLake();
         stubNoTriggers();
-        // Same real jump as the "escalates" test below, both readings
-        // trustworthy - but only 5 days apart, too short to annualize
-        // sensibly (SATELLITE_MIN_COMPARISON_DAYS is 20).
+        // Only 5 days apart - too short to annualize (SATELLITE_MIN_COMPARISON_DAYS = 20).
         when(lakeSatelliteObservationRepository.findTop2ByIcimodIdOrderByObservedAtDesc("TEST-LAKE"))
                 .thenReturn(List.of(
                         reading(0.25, 0.9, LocalDateTime.now()),
@@ -478,10 +459,7 @@ class GLOFRiskCalculationServiceTest {
     void satelliteGrowth_detectedButDoesNotEscalateWhenDisabled() {
         GlacialLake lake = testLake();
         stubNoTriggers();
-        // 25% relative growth (0.20 -> 0.25) over a real 60-day gap,
-        // annualizes to a rate real HKH-wide data says is a clear outlier,
-        // not noise - but the shared `service` instance has the satellite
-        // factor disabled (the default), so it can't affect the alert.
+        // 25% growth over 60 days annualizes past the real HKH-wide outlier rate; satellite factor is disabled here.
         when(lakeSatelliteObservationRepository.findTop2ByIcimodIdOrderByObservedAtDesc("TEST-LAKE"))
                 .thenReturn(List.of(
                         reading(0.25, 0.9, LocalDateTime.now()),
@@ -492,10 +470,7 @@ class GLOFRiskCalculationServiceTest {
         assertThat(result.getSatelliteLakeGrowthDetected()).isTrue();
         assertThat(result.getAlertLevel()).isEqualTo("NORMAL");
 
-        // Disabled means the satellite term contributes nothing and the
-        // other five weights are exactly today's 20/25/25/20/10 - real
-        // growth being computed in the background must not shift the score
-        // by even a fraction of a point while the switch is off.
+        // Disabled: weights stay the default 20/25/25/20/10, unaffected by the background growth calc.
         double seasonalModifier = service.calculateSeasonalModifier(LocalDateTime.now());
         double expectedScore = 20.0 * 0.15 + 10.0 * seasonalModifier;
         assertThat(result.getRiskScore()).isCloseTo(expectedScore, offset(1e-9));
@@ -519,11 +494,7 @@ class GLOFRiskCalculationServiceTest {
         assertThat(result.getSatelliteLakeGrowthDetected()).isTrue();
         assertThat(result.getAlertLevel()).isEqualTo("WATCH");
 
-        // 152%/year annualized is far past the real 18%/year saturation
-        // point, so satellite hazard should be fully saturated at 1.0,
-        // contributing exactly its 15-point weight - and the other four
-        // weights should be the redistributed (x0.85) values, not the
-        // original 20/25/25/20/10, given the factor is enabled here.
+        // 152%/year is past the real 18%/year saturation point, so satellite hazard saturates at 1.0; other weights redistribute x0.85.
         double seasonalModifier = escalatingService.calculateSeasonalModifier(LocalDateTime.now());
         double expectedScore = 17.0 * 0 + 21.25 * 0 + 21.25 * 0 + 17.0 * 0.15 + 8.5 * seasonalModifier + 15.0 * 1.0;
         assertThat(result.getRiskScore()).isCloseTo(expectedScore, offset(0.05));
@@ -567,9 +538,7 @@ class GLOFRiskCalculationServiceTest {
     void iceDrop_ignoresALowConfidenceDropEvenIfLarge() {
         Glacier glacier = testGlacier();
         stubNoTriggers();
-        // Ice fraction fell from 0.70 to 0.10 (a 60-point drop) over 5 days,
-        // but neither reading has enough valid (non-cloud) coverage to
-        // trust that - a cloud passing over looks exactly like ice vanishing.
+        // 60-point drop, but both readings have too little valid coverage - could just be a cloud passing over.
         when(glacierSatelliteObservationRepository.findTop2ByRgiIdOrderByObservedAtDesc("TEST-GLACIER"))
                 .thenReturn(List.of(
                         iceReading(0.10, 0.15, LocalDateTime.now()),
@@ -584,10 +553,7 @@ class GLOFRiskCalculationServiceTest {
     void iceDrop_ignoresAComparisonWindowThatIsTooLongToBeSudden() {
         Glacier glacier = testGlacier();
         stubNoTriggers();
-        // Same real drop as the "escalates" test below, both readings
-        // trustworthy - but 60 days apart, too long to call "sudden"
-        // (SATELLITE_ICE_MAX_COMPARISON_DAYS is 15) - more likely ordinary
-        // seasonal melt than a collapse.
+        // 60 days apart - too long to call sudden (SATELLITE_ICE_MAX_COMPARISON_DAYS = 15); more likely seasonal melt.
         when(glacierSatelliteObservationRepository.findTop2ByRgiIdOrderByObservedAtDesc("TEST-GLACIER"))
                 .thenReturn(List.of(
                         iceReading(0.10, 0.9, LocalDateTime.now()),
@@ -602,10 +568,7 @@ class GLOFRiskCalculationServiceTest {
     void iceDrop_detectedButDoesNotEscalateWhenDisabled() {
         Glacier glacier = testGlacier();
         stubNoTriggers();
-        // 60-point drop (0.70 -> 0.10) over a real 5-day gap, well past the
-        // 30-point sudden-drop floor - but the shared `service` instance
-        // has the glacier satellite factor disabled (the default), so it
-        // can't affect the alert or score.
+        // 60-point drop clears the 30-point sudden-drop floor; satellite factor is disabled here.
         when(glacierSatelliteObservationRepository.findTop2ByRgiIdOrderByObservedAtDesc("TEST-GLACIER"))
                 .thenReturn(List.of(
                         iceReading(0.10, 0.9, LocalDateTime.now()),
@@ -616,10 +579,7 @@ class GLOFRiskCalculationServiceTest {
         assertThat(result.getSatelliteIceSuddenDropDetected()).isTrue();
         assertThat(result.getAlertLevel()).isEqualTo("NORMAL");
 
-        // Disabled means the satellite term contributes nothing and the
-        // other five weights are exactly today's 20/25/25/20/10 - a real
-        // drop being computed in the background must not shift the score
-        // by even a fraction of a point while the switch is off.
+        // Disabled: weights stay the default 20/25/25/20/10, unaffected by the background drop calc.
         double seasonalModifier = service.calculateSeasonalModifier(LocalDateTime.now());
         double steepnessFactor = service.calculateSteepnessFactor(35.0);
         double expectedScore = 20.0 * steepnessFactor + 10.0 * seasonalModifier;
@@ -644,10 +604,7 @@ class GLOFRiskCalculationServiceTest {
         assertThat(result.getSatelliteIceSuddenDropDetected()).isTrue();
         assertThat(result.getAlertLevel()).isEqualTo("WATCH");
 
-        // 60-point drop is past the 50-point saturation ceiling, so ice-drop
-        // hazard should be fully saturated at 1.0, contributing exactly its
-        // 15-point weight - and the other four weights should be the
-        // redistributed (x0.85) values, not the original 20/25/25/20/10.
+        // 60-point drop is past the 50-point saturation ceiling, so hazard saturates at 1.0; other weights redistribute x0.85.
         double seasonalModifier = escalatingService.calculateSeasonalModifier(LocalDateTime.now());
         double steepnessFactor = escalatingService.calculateSteepnessFactor(35.0);
         double expectedScore = 17.0 * 0 + 21.25 * 0 + 21.25 * 0

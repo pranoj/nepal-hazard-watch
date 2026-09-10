@@ -41,10 +41,7 @@ public class EarthquakeAlertStatusResponse {
     public static EarthquakeAlertStatusResponse create(HazardEvent latest, HazardEvent previous) {
         EarthquakeAlertStatusResponse response = new EarthquakeAlertStatusResponse();
 
-        // Calculate minutes since latest earthquake. eventTime is stored as
-        // UTC (see UsgsEarthquakeService), so "now" must be UTC too - the
-        // host machine's own zone (e.g. US Central on this dev box) would
-        // silently skew this by several hours otherwise.
+        // eventTime is stored as UTC, so "now" must be UTC too - host zone would silently skew this otherwise
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         long minutesPassed = java.time.temporal.ChronoUnit.MINUTES.between(latest.getEventTime(), now);
         boolean isActive = minutesPassed <= 30;

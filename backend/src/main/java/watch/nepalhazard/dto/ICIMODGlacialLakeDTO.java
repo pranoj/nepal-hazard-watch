@@ -108,13 +108,7 @@ public class ICIMODGlacialLakeDTO {
                 .build();
     }
 
-    /**
-     * The ICIMOD source data itself often stores the literal string
-     * "Unknown"/"Unnamed" for Lake_name (not a blank we're defaulting).
-     * Fall through progressively less specific but still real fields -
-     * glacier, then river basin, then province - before resorting to a
-     * bare ID, so a name always tells you at least roughly where the lake is.
-     */
+    // ICIMOD often stores the literal string "Unknown"/"Unnamed" for Lake_name - falls through to glacier, basin, province, then a bare ID.
     private String resolveLakeName(String icimodId) {
         if (isKnownName(this.lakeName)) {
             return this.lakeName.trim();
@@ -123,7 +117,7 @@ public class ICIMODGlacialLakeDTO {
             return this.glacierName.trim() + " Glacier Lake";
         }
         if (isKnownName(this.riverBasin)) {
-            return "Lake near " + this.riverBasin.trim();
+            return "Lake near " + this.riverBasin.trim() + " Basin";
         }
         if (isKnownName(this.province)) {
             return "Lake near " + this.province.trim();

@@ -14,14 +14,7 @@ import watch.nepalhazard.entity.LakeSatelliteObservation;
 import watch.nepalhazard.repository.GlacialLakeRepository;
 import watch.nepalhazard.repository.LakeSatelliteObservationRepository;
 
-/**
- * Collects a real Sentinel-2 water-fraction reading for every lake, on a
- * cadence matched to Sentinel-2's real revisit rate rather than app
- * restarts - a lake with an observation newer than
- * MIN_REFRESH_INTERVAL_DAYS is skipped, so restarting the app during
- * development doesn't silently burn through the free processing-unit
- * quota re-fetching imagery that hasn't changed.
- */
+/** Sentinel-2 water-fraction reading per lake. Skips lakes with a fresh-enough observation so app restarts don't burn the free processing-unit quota. */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -30,16 +23,10 @@ public class SatelliteLakeTrackingService {
     private static final double AOI_HALF_WIDTH_DEG = 0.012;
     private static final int LOOKBACK_DAYS = 10;
     private static final int MIN_REFRESH_INTERVAL_DAYS = 4;
-    // For the one-time historical backfill: a real older reading, far enough
-    // back to be a genuine independent pass, not just yesterday's near-
-    // duplicate, but recent enough that "growth since then" is still a
-    // meaningful comparison rather than a different season entirely.
+    // Backfill window: old enough to be an independent pass, recent enough that growth-since-then is still meaningful.
     private static final int BACKFILL_WINDOW_END_DAYS_AGO = 25;
     private static final int BACKFILL_WINDOW_LENGTH_DAYS = 15;
-    // Sentinel Hub's real observed rate limit during testing was tighter
-    // than the documented 300/min - a 1s gap alone still produced 429s, so
-    // this leaves more headroom, backed up by SentinelHubClient's own
-    // retry-with-backoff for the ones that still land close together.
+    // Observed rate limit is tighter than the documented 300/min; a 1s gap alone still produced 429s.
     private static final long REQUEST_DELAY_MS = 3000;
 
     private final GlacialLakeRepository glacialLakeRepository;
@@ -78,13 +65,7 @@ public class SatelliteLakeTrackingService {
                 fetched, skippedFresh, failed);
     }
 
-    /**
-     * One-time historical backfill: any lake with only one real observation
-     * (nothing to compare it against yet) gets a real older reading pulled
-     * from Sentinel-2's archive, so growth comparison works immediately
-     * instead of waiting for the next 5-day live cycle. Skips lakes that
-     * already have two or more - safe to call on every startup.
-     */
+    /** One-time backfill: pulls an older archive reading for any lake with only one observation. Safe to call on every startup. */
     public void backfillHistoricalBaseline() {
         List<GlacialLake> lakes = glacialLakeRepository.findAllLakesInNepal();
         log.info("Checking satellite historical backfill for {} lakes", lakes.size());
@@ -105,8 +86,7 @@ public class SatelliteLakeTrackingService {
                 continue;
             }
             if (existing.isEmpty()) {
-                // No current reading either yet - let the live job get one
-                // first; backfill only fills the gap behind an existing one.
+                // no current reading yet; backfill only fills the gap behind an existing one
                 skippedNoCurrent++;
                 continue;
             }

@@ -12,13 +12,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * A single real Sentinel-2 NDWI-derived water-fraction reading for one
- * lake, from watch.nepalhazard.service.SentinelHubClient. One row per
- * successful satellite pass, not a scored/aggregated value - the
- * short-term growth comparison happens at read time in
- * GLOFRiskCalculationService.
- */
+/** One Sentinel-2 NDWI water-fraction reading per satellite pass, not aggregated - growth comparison happens at read time in GLOFRiskCalculationService. */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -43,12 +37,7 @@ public class LakeSatelliteObservation {
     @Column(name = "mean_ndwi")
     private Double meanNdwi;
 
-    /**
-     * Fraction of the sampled box that was actually usable (not cloud/
-     * shadow/invalid) - a reading built on a low fraction of this is not
-     * trustworthy for a growth comparison, even if the number itself looks
-     * dramatic.
-     */
+    /** Fraction of the sampled box that was usable (not cloud/shadow/invalid) - low values make the reading untrustworthy. */
     @Column(name = "valid_pixel_fraction", nullable = false)
     private Double validPixelFraction;
 

@@ -29,15 +29,8 @@ public class HazardEvent {
     @Column(name = "event_type")
     private String eventType;
 
-    /**
-     * The raw USGS classification (e.g. "earthquake", "landslide", "quarry
-     * blast") for events sourced from USGS. A "landslide" detection is a
-     * direct seismic-network sighting of an actual mass movement (e.g. an
-     * ice/rock avalanche hitting terrain) - a much stronger, more concrete
-     * signal for glacier-collapse risk than ordinary tectonic shaking, so it
-     * is kept distinct from eventType (which stays "EARTHQUAKE" for both,
-     * since both are real seismic-network detections).
-     */
+    // raw USGS classification (earthquake/landslide/quarry blast); eventType stays "EARTHQUAKE" for both since both are seismic-network detections
+
     @Column(name = "source_type")
     private String sourceType;
 

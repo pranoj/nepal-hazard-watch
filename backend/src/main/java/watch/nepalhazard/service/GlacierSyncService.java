@@ -18,19 +18,10 @@ import watch.nepalhazard.repository.GlacierRepository;
 import watch.nepalhazard.repository.RiverBasinTownRepository;
 
 /**
- * Imports "Type B" glacier watch points from the RGI (Randolph Glacier
- * Inventory) v7 export - glaciers with a steep terminus near a known river
- * corridor, capable of collapsing and damming a river directly without any
- * pre-existing lake, as happened at Langtang Lirung on Aug 2026.
- *
- * Source CSV (rgi_glaciers_nepal_envelope.csv) is already pre-filtered to
- * Nepal's border envelope and slope > 20 degrees (see
- * backend/src/main/resources/data/geospatial/ for the one-time processing
- * notes). This service applies the real qualification: steeper terminus
- * AND within a plausible distance of a known river corridor point.
- *
- * Glacier physical properties don't change day to day (unlike weather or
- * earthquakes), so this runs once at startup rather than on a schedule.
+ * Imports "Type B" glacier watch points (RGI v7 export) - steep termini near a river corridor that can
+ * collapse and dam it directly without a pre-existing lake (e.g. Langtang Lirung, Aug 2026). Source CSV is
+ * pre-filtered to Nepal's envelope and slope &gt; 20deg; this applies the real MIN_SLOPE_DEG/river-distance cut.
+ * Runs once at startup, not scheduled - glacier geometry doesn't change day to day.
  */
 @Slf4j
 @Service
@@ -107,9 +98,7 @@ public class GlacierSyncService {
         Optional<Glacier> existing = glacierRepository.findByRgiId(glacier.getRgiId());
         boolean isNew = existing.isEmpty();
 
-        // Re-imported from the static RGI CSV on every startup, so anything
-        // computed separately (like the local terrain slope) must be carried
-        // forward explicitly or it gets silently wiped back to null here.
+        // re-imported from the CSV every startup - fields computed elsewhere (local slope) must be carried forward or they're wiped to null
         existing.ifPresent(existingGlacier -> {
             glacier.setId(existingGlacier.getId());
             glacier.setLocalSlopeDeg(existingGlacier.getLocalSlopeDeg());

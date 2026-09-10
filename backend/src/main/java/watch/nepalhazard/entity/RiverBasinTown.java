@@ -11,11 +11,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * A town/city known to sit downstream on a given river basin - a curated
- * reference (not computed GIS flow-routing) used to answer "if this lake's
- * risk is high, who is downstream and should be warned."
- */
+/** A curated (not computed GIS flow-routing) downstream town reference, used to answer who should be warned for a given lake. */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -38,9 +34,7 @@ public class RiverBasinTown {
 
     private Double longitude;
 
-    /**
-     * 1 = closest/first downstream, increasing = further away.
-     */
+    // 1 = closest/first downstream, increasing = further away
     @Column(name = "downstream_order", nullable = false)
     private Integer downstreamOrder;
 }

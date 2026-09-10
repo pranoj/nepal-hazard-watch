@@ -8,8 +8,7 @@ interface RainfallTrendCardProps {
     worst: GlofRiskAssessment | null;
 }
 
-// No real river gauge feed, so this shows daily rainfall at the highest-risk
-// point instead, bucketed from raw readings into daily totals.
+// no real river gauge feed - shows daily rainfall at the highest-risk point, bucketed from raw readings
 export function RainfallTrendCard({ worst }: RainfallTrendCardProps) {
     const locationKey = worst?.icimodId ?? '348';
     const locationLabel = worst?.lakeName ?? 'Dig Tsho';

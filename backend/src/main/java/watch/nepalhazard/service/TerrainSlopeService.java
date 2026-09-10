@@ -12,13 +12,7 @@ import org.springframework.web.client.RestTemplate;
 import watch.nepalhazard.entity.Glacier;
 import watch.nepalhazard.repository.GlacierRepository;
 
-/**
- * Fills in a locally-computed terminus slope for each glacier, from real
- * elevation samples a short distance apart around the terminus point -
- * more relevant to collapse risk than RGI's whole-glacier mean slope.
- * Glacier terrain doesn't change day to day, so this runs once at startup
- * (skipping glaciers that already have a value) rather than on a schedule.
- */
+/** Computes a local terminus slope from nearby elevation samples - more relevant to collapse risk than RGI's whole-glacier mean. Runs once at startup. */
 @Slf4j
 @Service
 public class TerrainSlopeService {
@@ -106,11 +100,7 @@ public class TerrainSlopeService {
         }
     }
 
-    /**
-     * Central-difference slope from four elevation samples offsetMeters
-     * apart in each cardinal direction around a center point. Package-
-     * private so it can be unit tested without a live network call.
-     */
+    /** Central-difference slope from four elevation samples. Package-private so it can be unit tested without a live network call. */
     static double computeSlopeDeg(double elevNorth, double elevSouth, double elevEast, double elevWest,
             double offsetMeters) {
         double gradLat = (elevNorth - elevSouth) / (2 * offsetMeters);

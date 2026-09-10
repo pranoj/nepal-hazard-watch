@@ -30,8 +30,7 @@ export function useDownstreamTowns() {
                 }
                 setTownsByBasin(grouped);
             } catch {
-                // Downstream-town context is supplementary; a fetch failure
-                // shouldn't block the rest of the risk display.
+                // supplementary data; don't block the risk display on failure
             } finally {
                 setLoading(false);
             }

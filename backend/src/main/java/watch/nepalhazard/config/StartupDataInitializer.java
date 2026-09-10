@@ -10,18 +10,7 @@ import watch.nepalhazard.service.ICIMODGlacialLakeService;
 import watch.nepalhazard.service.SatelliteLakeTrackingService;
 import watch.nepalhazard.service.TerrainSlopeService;
 
-/**
- * Startup data initializer
- * 
- * Automatically loads ICIMOD glacial lake data when the Spring Boot application
- * finishes starting up. This ensures all glacial lakes are in the database
- * before
- * any API requests are processed.
- * 
- * Data Source: ICIMOD (International Centre for Integrated Mountain
- * Development)
- * License: CC BY 4.0 (Creative Commons Attribution 4.0 International)
- */
+/** Loads ICIMOD glacial lake data (CC BY 4.0) on startup, before any API requests are processed. */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -42,19 +31,13 @@ public class StartupDataInitializer {
             icimodGlacialLakeService.initializeICIMODData();
             long lakeCount = icimodGlacialLakeService.getNepalGlacialLakeCount();
 
-            // Initialize "Type B" glacier watch points (steep terminus near
-            // a known river corridor) - relies on river_basin_towns already
-            // being seeded, which happens earlier via CommandLineRunner
+            // relies on river_basin_towns already being seeded via CommandLineRunner
             glacierSyncService.initializeGlacierData();
 
-            // Real local terminus slope, from elevation samples - runs once,
-            // skips glaciers that already have a value.
+            // local terminus slope from elevation samples; skips glaciers that already have a value
             terrainSlopeService.fillMissingLocalSlopes();
 
-            // Real older Sentinel-2 reading for any lake that only has one
-            // observation so far, so growth comparison works immediately
-            // instead of waiting for the next live 5-day cycle. Skips lakes
-            // that already have two or more.
+            // one-time backfill so growth comparison works before the next live 5-day cycle
             satelliteLakeTrackingService.backfillHistoricalBaseline();
 
             log.info("═══════════════════════════════════════════════════════════");
@@ -68,9 +51,7 @@ public class StartupDataInitializer {
             log.error("Error: {}", e.getMessage(), e);
             log.error("═══════════════════════════════════════════════════════════");
 
-            // Note: We log the error but don't throw - allows app to start even if ICIMOD
-            // load fails
-            // This is intentional for production resilience
+            // intentionally not rethrown - app should start even if ICIMOD load fails
             log.warn("⚠️  App started without ICIMOD data - manual sync may be needed");
         }
     }

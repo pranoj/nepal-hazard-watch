@@ -21,18 +21,14 @@ export function Dashboard() {
     const mapCardRef = useRef<HTMLDivElement>(null);
     const focusClickCount = useRef(0);
 
-    // Every click gets a fresh token (even re-clicking the same name) so the
-    // map's effect always re-fires, and scrolls the map into view - same
-    // outcome as if you'd scrolled down and clicked the point yourself.
+    // fresh token each click (even re-clicking the same name) so the map's effect always re-fires
     function focusOnMap(riskId: number) {
         focusClickCount.current += 1;
         setFocusTarget({ riskId, token: focusClickCount.current });
         mapCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
-    // Same behavior as focusOnMap, but for an earthquake/landslide marker -
-    // those aren't in glofRisks, so the coordinates travel with the click
-    // itself instead of being looked up.
+    // same as focusOnMap, but seismic events aren't in glofRisks, so coordinates travel with the click itself
     function focusOnSeismicEvent(event: { id: number; latitude: number; longitude: number }) {
         focusClickCount.current += 1;
         setFocusTarget({
@@ -94,10 +90,7 @@ export function Dashboard() {
                     </div>
                 </header>
 
-                {/* Grid keeps AlertStatus and the map in the same column width.
-                    Below the mobile breakpoint it collapses to a single
-                    column so the sidebar's 260px minimum can't squeeze the
-                    map down to a sliver. */}
+                {/* below the mobile breakpoint, collapses to a single column so the sidebar's 260px minimum can't squeeze the map */}
                 <div style={{
                     display: 'grid',
                     gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'minmax(0, 3fr) minmax(260px, 1fr)',

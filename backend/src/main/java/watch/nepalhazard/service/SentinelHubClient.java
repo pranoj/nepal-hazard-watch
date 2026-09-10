@@ -19,12 +19,7 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
-/**
- * Sentinel Hub (Copernicus Data Space Ecosystem) client used by
- * SatelliteLakeTrackingService and SatelliteGlacierTrackingService to pull
- * real NDWI water-fraction and NDSI ice-fraction readings for each
- * monitored point.
- */
+/** Sentinel Hub (Copernicus Data Space Ecosystem) client - NDWI water-fraction and NDSI ice-fraction readings per monitored point. */
 @Slf4j
 @Component
 public class SentinelHubClient {
@@ -58,11 +53,7 @@ public class SentinelHubClient {
         this.objectMapper = new ObjectMapper();
     }
 
-    /**
-     * NDWI-derived water fraction for a small box around (lat, lon), over
-     * [from, to). Real live call to the Statistics API - no caching of the
-     * result itself, this is a manual test path, not a scheduled job.
-     */
+    /** NDWI-derived water fraction for a small box around (lat, lon), over [from, to). Live call, not cached. */
     public LakeWaterReading fetchWaterFraction(double lat, double lon, double halfWidthDeg, LocalDate from,
             LocalDate to) {
         String token = getAccessToken();
@@ -86,12 +77,7 @@ public class SentinelHubClient {
         return parseResponse(body);
     }
 
-    /**
-     * NDSI-derived snow/ice fraction for a small box around a glacier
-     * terminus, over [from, to). Same Statistics API, same OAuth/retry
-     * plumbing as fetchWaterFraction - only the evalscript and output field
-     * names differ. See SatelliteGlacierTrackingService.
-     */
+    /** NDSI-derived snow/ice fraction for a glacier terminus box, over [from, to). Same plumbing as fetchWaterFraction. */
     public IceCoverReading fetchIceFraction(double lat, double lon, double halfWidthDeg, LocalDate from,
             LocalDate to) {
         String token = getAccessToken();
@@ -222,12 +208,7 @@ public class SentinelHubClient {
         String fromIso = from.atStartOfDay(ZoneOffset.UTC).toInstant().toString();
         String toIso = to.atStartOfDay(ZoneOffset.UTC).toInstant().toString();
 
-        // NDSI (Normalized Difference Snow Index) = (green - SWIR1) / (green + SWIR1),
-        // using Sentinel-2 B03 (10m) and B11 (20m, auto-resampled by the API to
-        // match the requested output size). NDSI > 0.4 is the standard snow/ice
-        // classification threshold (Hall et al., used operationally by USGS/MODIS
-        // snow-cover products) - same cloud/shadow/cirrus SCL mask as the water
-        // evalscript above.
+        // NDSI > 0.4 is the standard snow/ice threshold (Hall et al., used operationally by USGS/MODIS).
         String evalscript = ""
                 + "//VERSION=3\n"
                 + "function setup() {\n"
@@ -318,9 +299,7 @@ public class SentinelHubClient {
                 return LakeWaterReading.empty(body);
             }
 
-            // Most recent interval with actual valid pixels, not just the
-            // last one in the array (some intervals may have zero coverage
-            // due to clouds).
+            // most recent interval with actual valid pixels - some intervals have zero coverage due to clouds
             for (int i = data.size() - 1; i >= 0; i--) {
                 JsonNode outputs = data.get(i).path("outputs");
                 JsonNode ndwiStats = outputs.path("ndwi").path("bands").path("B0").path("stats");

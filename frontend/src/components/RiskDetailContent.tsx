@@ -7,9 +7,7 @@ interface RiskDetailContentProps {
     downstreamTowns?: RiverBasinTown[];
 }
 
-// Shared with the map's own marker popup (see Map.tsx), so clicking a name
-// anywhere in the app shows exactly the same card as clicking its point on
-// the map, not a second, differently-worded summary.
+// shared with the map's own marker popup (see Map.tsx) - same card everywhere, not a second differently-worded summary
 export function RiskDetailContent({ risk, downstreamTowns }: RiskDetailContentProps) {
     const isGlacier = risk.sourceType === 'GLACIER';
     const satelliteFlagLabel = isGlacier

@@ -12,13 +12,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * A single real Sentinel-2 NDSI-derived ice/snow-cover reading for one
- * glacier terminus, from watch.nepalhazard.service.SentinelHubClient. One
- * row per successful satellite pass - the sudden-drop comparison happens at
- * read time in GLOFRiskCalculationService, same pattern as
- * LakeSatelliteObservation.
- */
+/** One Sentinel-2 NDSI ice/snow-cover reading per satellite pass - sudden-drop comparison happens at read time in GLOFRiskCalculationService. */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -43,12 +37,7 @@ public class GlacierSatelliteObservation {
     @Column(name = "mean_ndsi")
     private Double meanNdsi;
 
-    /**
-     * Fraction of the sampled box that was actually usable (not cloud/
-     * shadow/invalid) - a reading built on a low fraction of this is not
-     * trustworthy for a sudden-drop comparison, even if the number itself
-     * looks dramatic (a cloud passing over looks exactly like ice vanishing).
-     */
+    /** Fraction of the sampled box usable (not cloud/shadow/invalid) - a cloud passing over looks exactly like ice vanishing at low values. */
     @Column(name = "valid_pixel_fraction", nullable = false)
     private Double validPixelFraction;
 

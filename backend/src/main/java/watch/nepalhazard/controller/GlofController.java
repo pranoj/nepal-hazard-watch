@@ -30,11 +30,7 @@ public class GlofController {
         return ResponseEntity.ok(glofRiskAssessmentRepository.findAllOrderByRiskScoreDesc());
     }
 
-    /**
-     * All known basin-to-downstream-town mappings in one shot (small, ~40
-     * rows) so the frontend can look up towns for any at-risk lake's basin
-     * client-side without a per-lake round trip.
-     */
+    /** All basin-to-downstream-town mappings in one shot (~40 rows) so the frontend can look up client-side without a per-lake round trip. */
     @GetMapping("/downstream-towns")
     public ResponseEntity<List<RiverBasinTown>> getDownstreamTowns() {
         return ResponseEntity.ok(riverBasinTownRepository.findAll());

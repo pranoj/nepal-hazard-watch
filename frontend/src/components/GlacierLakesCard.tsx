@@ -12,9 +12,7 @@ interface FeaturedLake {
     wikipediaUrl: string;
 }
 
-// Only lakes with a real matching Wikimedia Commons photo and real
-// Wikipedia coverage - a small verified pool instead of padding it out
-// with unverifiable photos or dead links.
+// small verified pool (real Wikimedia photo + Wikipedia coverage) instead of padding with unverifiable/dead links
 const FEATURED_LAKES: FeaturedLake[] = [
     {
         name: 'Tsho Rolpa',
@@ -35,9 +33,7 @@ const FEATURED_LAKES: FeaturedLake[] = [
         caption: 'Real 1985 GLOF: destroyed a hydropower plant and 14 bridges, 5 deaths',
         photoUrl:
             'https://upload.wikimedia.org/wikipedia/commons/b/b8/ISS066-E-86263_-_View_of_Nepal_-_Drolambao_Glacier_-_Drangnag_Ri_-_Rolwaling_Glacier_-_Chobuje_%28Tsoboje%29_-_Trakarding_Glacier_-_Tsho_Rolpa_Lake_-_Dragkar_Go_%28Takargo%29_-_Tengi_Ragi_Tau_-_Dig_Tsho_Lake_-_Chhule_Glacier_%28cropped%29.jpg',
-        // No dedicated Wikipedia article exists for Dig Tsho - links to
-        // where it's actually, substantively covered instead of a search
-        // page or a guessed/dead article title.
+        // no dedicated Wikipedia article for Dig Tsho - links to where it's substantively covered instead
         wikipediaUrl: 'https://en.wikipedia.org/wiki/Glacial_lake_outburst_flood',
     },
     {
@@ -63,8 +59,7 @@ interface GlacierLakesCardProps {
 }
 
 export function GlacierLakesCard({ risks }: GlacierLakesCardProps) {
-    // Shuffled once per page load - a fresh order each visit, no
-    // auto-rotating timer to distract from while reading.
+    // shuffled once per page load - no auto-rotating timer to distract from while reading
     const order = useMemo(() => shuffled(FEATURED_LAKES), []);
 
     return (

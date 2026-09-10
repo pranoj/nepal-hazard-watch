@@ -6,11 +6,7 @@ export function findHighestRisk(risks: GlofRiskAssessment[]): GlofRiskAssessment
         : null;
 }
 
-// A WATCH score can come from a real trigger (rain, quake, landslide) or
-// just a lake's static classification plus monsoon season - lake-type +
-// season maxes out at 30 points, below the 50-point DANGER floor, so only
-// WATCH can happen on static factors alone. The earthquake threshold (not
-// "> 0") filters out the near-zero noise a distant, weak quake leaves behind.
+// lake-type + season maxes out at 30 pts (below the 50-pt DANGER floor), so only WATCH can happen on static factors alone
 const EARTHQUAKE_ACTIVE_THRESHOLD = 0.15;
 
 export function hasActiveTrigger(risk: GlofRiskAssessment): boolean {

@@ -11,9 +11,7 @@ public interface HazardEventRepository extends JpaRepository<HazardEvent, Long> 
     @Query(value = "SELECT * FROM hazard_events WHERE event_type = 'EARTHQUAKE' ORDER BY event_time DESC LIMIT 2", nativeQuery = true)
     List<HazardEvent> findLatestTwoEarthquakes();
 
-    // Excludes source_type='landslide' - those are mass-movement detections,
-    // not tectonic shaking, and are scored as a separate, stronger signal
-    // via findRecentLandslides() instead of being folded in here.
+    // excludes source_type='landslide' - those are scored separately via findRecentLandslides()
     @Query(value = "SELECT * FROM hazard_events WHERE event_type = 'EARTHQUAKE' "
             + "AND (source_type IS NULL OR source_type = 'earthquake') AND event_time >= :since ORDER BY event_time DESC", nativeQuery = true)
     List<HazardEvent> findRecentEarthquakes(@Param("since") LocalDateTime since);

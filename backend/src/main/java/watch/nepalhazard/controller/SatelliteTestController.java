@@ -9,13 +9,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import watch.nepalhazard.service.SentinelHubClient;
 
-/**
- * Manual test surface for the Sentinel Hub integration - not linked from
- * the frontend, not used by GLOFRiskCalculationService. Exists so a real
- * live call can be checked by hand against any point, separate from the
- * scheduled tracking jobs (SatelliteLakeTrackingService,
- * SatelliteGlacierTrackingService) that actually feed the risk formula.
- */
+/** Manual test surface for the Sentinel Hub integration - not linked from the frontend or used by the risk formula. */
 @RestController
 @RequestMapping("/satellite")
 public class SatelliteTestController {
@@ -30,11 +24,7 @@ public class SatelliteTestController {
         this.sentinelHubClient = sentinelHubClient;
     }
 
-    /**
-     * GET /api/satellite/test-tsho-rolpa?days=30
-     * Real live call against Tsho Rolpa's real coordinates (27.867, 86.467)
-     * over the last {days} days.
-     */
+    /** GET /api/satellite/test-tsho-rolpa?days=30 - live call against Tsho Rolpa's coordinates. */
     @GetMapping("/test-tsho-rolpa")
     public ResponseEntity<?> testTshoRolpa(@RequestParam(defaultValue = "30") int days) {
         LocalDate to = LocalDate.now();
@@ -43,10 +33,7 @@ public class SatelliteTestController {
         return ResponseEntity.ok(reading);
     }
 
-    /**
-     * GET /api/satellite/test?lat=..&lon=..&halfWidthDeg=0.01&days=30
-     * Same call for an arbitrary point, for testing other lakes by hand.
-     */
+    /** GET /api/satellite/test?lat=..&lon=..&halfWidthDeg=0.01&days=30 - same call for an arbitrary point. */
     @GetMapping("/test")
     public ResponseEntity<?> test(
             @RequestParam double lat,

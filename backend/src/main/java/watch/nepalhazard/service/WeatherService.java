@@ -18,12 +18,7 @@ import watch.nepalhazard.repository.WeatherRepository;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/**
- * Fetches real weather/rainfall data from OpenWeatherMap at each glacial
- * lake's and glacier watch point's own coordinates (not a couple of distant
- * cities), so GLOF risk calculation reflects actual conditions at each
- * point instead of a proxy that can be hundreds of km away.
- */
+/** Fetches OpenWeatherMap data at each lake/glacier's own coordinates, not a proxy city that can be hundreds of km away. */
 @Slf4j
 @Service
 public class WeatherService {

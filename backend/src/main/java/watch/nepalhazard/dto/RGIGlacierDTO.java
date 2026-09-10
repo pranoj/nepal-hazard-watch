@@ -6,13 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * One row of the pre-filtered RGI (Randolph Glacier Inventory) v7 export -
- * see rgi_glaciers_nepal_envelope.csv and the geospatial/ processing notes.
- * Already restricted to Nepal's border envelope and slope > 20 degrees;
- * the real "is this a watch point" qualification (steeper + near a known
- * river corridor) is applied in GlacierSyncService.
- */
+/** One row of the pre-filtered RGI v7 export (Nepal envelope, slope &gt; 20deg). Real watch-point qualification is applied in GlacierSyncService. */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

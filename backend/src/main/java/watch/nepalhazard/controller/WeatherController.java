@@ -12,7 +12,6 @@ import watch.nepalhazard.entity.Weather;
 import watch.nepalhazard.service.WeatherService;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -24,19 +23,11 @@ public class WeatherController {
 
     @GetMapping("/{location}")
     public ResponseEntity<?> getLatestWeatherForLocation(@PathVariable String location) {
-        try {
-            Weather weather = weatherService.getLatestWeather(location);
-            if (weather == null) {
-                Map<String, String> response = new HashMap<>();
-                response.put("message", "No weather data found for " + location);
-                return ResponseEntity.status(404).body(response);
-            }
-            return ResponseEntity.ok(weather);
-        } catch (Exception e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", "Error fetching weather for " + location + ": " + e.getMessage());
-            return ResponseEntity.status(500).body(error);
+        Weather weather = weatherService.getLatestWeather(location);
+        if (weather == null) {
+            return ResponseEntity.status(404).body(Map.of("message", "No weather data found for " + location));
         }
+        return ResponseEntity.ok(weather);
     }
 
     @GetMapping("/history/{location}")
@@ -44,25 +35,17 @@ public class WeatherController {
             @PathVariable String location,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime) {
-        try {
-            if (startTime == null) {
-                startTime = LocalDateTime.now().minusDays(7);
-            }
-            if (endTime == null) {
-                endTime = LocalDateTime.now();
-            }
-
-            List<Weather> history = weatherService.getRainfallHistory(location, startTime, endTime);
-            if (history.isEmpty()) {
-                Map<String, String> response = new HashMap<>();
-                response.put("message", "No weather history found for " + location);
-                return ResponseEntity.ok(response);
-            }
-            return ResponseEntity.ok(history);
-        } catch (Exception e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", "Error fetching weather history: " + e.getMessage());
-            return ResponseEntity.status(500).body(error);
+        if (startTime == null) {
+            startTime = LocalDateTime.now().minusDays(7);
         }
+        if (endTime == null) {
+            endTime = LocalDateTime.now();
+        }
+
+        List<Weather> history = weatherService.getRainfallHistory(location, startTime, endTime);
+        if (history.isEmpty()) {
+            return ResponseEntity.ok(Map.of("message", "No weather history found for " + location));
+        }
+        return ResponseEntity.ok(history);
     }
 }

@@ -45,9 +45,8 @@ export function ClockWeatherCard({ worst }: ClockWeatherCardProps) {
     }, []);
 
     const { time, day } = formatNepalNow(now);
-    const { Icon: WeatherIcon, color: weatherColor } = weather
-        ? WEATHER_CONDITION_ICON[weather.weatherCondition] ?? { Icon: CloudSun, color: '#cbd5e1' }
-        : { Icon: CloudSun, color: '#cbd5e1' };
+    const { Icon: WeatherIcon, color: weatherColor } =
+        (weather && WEATHER_CONDITION_ICON[weather.weatherCondition]) ?? { Icon: CloudSun, color: '#cbd5e1' };
 
     return (
         <div style={glassCardPad}>
